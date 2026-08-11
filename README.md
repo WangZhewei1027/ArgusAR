@@ -1,169 +1,108 @@
 # ArgusAR
 
-ArgusAR is a realtime visual SLAM engine for the open web — WebAssembly-powered world tracking, plane detection, and (in progress) metric scale estimation, targeting the browsers where native AR (ARKit/ARCore/WebXR) isn't available, such as iOS Safari and in-app webviews.
-
-It began as a fork of [AlvaAR](https://github.com/alanross/AlvaAR) by Alan Ross, which is itself a heavily modified version of the [OV²SLAM](https://github.com/ov2slam/ov2slam) and [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2) projects. All of them are GPLv3, and so is this project. See [ROADMAP.md](ROADMAP.md) for the upgrade plan and current status.
+ArgusAR is a realtime **visual SLAM engine for the open web** — WebAssembly-powered world tracking, multi-plane detection, and (in progress) metric scale estimation. It targets the places native AR can't reach: **iOS Safari, in-app webviews, and any browser a QR code can open** — no app install, no ARKit/ARCore/WebXR required.
 
 ![image](examples/public/assets/image.gif)
 
+## Features
 
-## Examples
-The examples use [ThreeJS](https://threejs.org/) to apply and render the estimated camera pose to a 3d environment.  
+- **World tracking** — monocular visual SLAM (OV²SLAM / ORB-SLAM2 lineage), compiled to WASM, ~5ms per frame on a laptop
+- **Multi-plane detection** — sequential RANSAC over the live map with persistent plane identities, EMA-smoothed poses, convex-hull boundaries, and horizontal / vertical / arbitrary classification
+- **Hit testing** — cast a ray from any screen pixel onto tracked planes to place content
+- **Web Worker pipeline** — SLAM runs off the main thread; the UI stays at full framerate
+- **Split streaming artifacts** — ~130KB JS loader + streaming-compiled `.wasm`, with a version-locking scheme so cached JS/wasm pairs can never mismatch
+- **Adaptive quality** — steps processing resolution under load to keep older phones interactive
 
-[Video Demo](https://wangzhewei1027.github.io/ArgusAR/examples/public/video.html): A desktop browser version using a video file as input.  
-[Camera Demo](https://wangzhewei1027.github.io/ArgusAR/examples/public/camera.html): The mobile version will access the device camera as input.
+See [ROADMAP.md](ROADMAP.md) for what's done and what's next (SLAM robustness, loop closure, metric scale via IMU + depth networks, WebGPU frontend, multithreading).
+
+## Try it
+
+| Demo | What it shows |
+|---|---|
+| [Camera](https://wangzhewei1027.github.io/ArgusAR/examples/public/camera.html) (open on a phone) | Live camera tracking + plane detection; tap to place objects on detected planes |
+| [Planes](https://wangzhewei1027.github.io/ArgusAR/examples/public/video_planes.html) | Video playback with detected plane polygons + hit-test placement |
+| [Video](https://wangzhewei1027.github.io/ArgusAR/examples/public/video.html) | Classic tracking demo on a prerecorded video |
+| [Worker](https://wangzhewei1027.github.io/ArgusAR/examples/public/video_worker.html) | SLAM in a Web Worker with adaptive resolution |
+| [Benchmark](https://wangzhewei1027.github.io/ArgusAR/examples/public/bench.html) | Deterministic per-frame timing stats (seek-driven, frame-exact) |
+
+Scan to open the camera demo:
 
 <img width="75" src="examples/public/assets/qr.png">
 
-### Run with http server
-To run the examples on your local machine, start a simple http server in the examples/ folder:
-
-`$: python 2: python -m SimpleHTTPServer 8080` or   
-`$: python 3: python -m http.server 8080` or  
-`$: emrun --browser chrome ./`
-
-Then open [http://localhost:8080/public/video.html](http://localhost:8080/public/video.html]) in your browser.
-
-### Run with https server
-To run the examples on another device in your local network, they must be served via https. For convenience, a simple https server was added to this project – do not use for production.
-
-#### 1) Install server dependencies
-```
-    $: cd ./ArgusAR/examples/
-    $: npm install
-```
-
-#### 2) Generate self-signed certificate
-```
-    $: cd ./ArgusAR/examples
-    $: mkdir ssl/
-    $: cd ssl/
-    $: openssl req -nodes -new -x509 -keyout key.pem -out cert.pem
-```
-
-#### 3) Run
-```
-    $: cd ./ArgusAR/examples/
-    $: nvm use 13.2
-    $: npm start
-``` 
-Then open [https://YOUR_IP:443/video.html](https://YOUR_IP:443/video.html]) in your browser.
-If met with a <b>ERR_CERT_INVALID</b> error in Chrome,
-try typing <i>badidea</i> or <i>thisisunsafe</i> directly in Chrome on the same page.
-Don’t do this unless the site is one you trust or develop.
-
-
 ## Usage
-
-This code shows how to send image data to ArgusAR to compute the camera pose.
 
 ```javascript
 import { ArgusAR } from 'argus_ar.js';
-
-const videoOrWebcam = /*...*/;
-
-const width = videoOrWebcam.width;
-const height = videoOrWebcam.height;
-
-const canvas = document.getElementById( 'canvas' );
-const ctx = canvas.getContext( '2d' );
-
-canvas.width = width;
-canvas.height = height;
 
 const argus = await ArgusAR.Initialize( width, height );
 
 function loop()
 {
-    ctx.clearRect( 0, 0, width, height );
-    ctx.drawImage( videoOrWebcam, 0, 0, width, height );
-    
     const frame = ctx.getImageData( 0, 0, width, height );
-    
-    // cameraPose holds the rotation/translation information where the camera is estimated to be
-    const cameraPose = argus.findCameraPose( frame );
-    
-    // planePose holds the rotation/translation information of a detected plane
-    const planePose = argus.findPlane();
-    
-    // The tracked points in the frame
-    const points = argus.getFramePoints();
 
-    for( const p of points )
-    {
-        ctx.fillRect( p.x, p.y, 2, 2 );
-    }
-};
+    // camera pose (column-major 4x4, null while lost/initializing)
+    const cameraPose = argus.findCameraPose( frame );
+
+    // all persistently tracked planes:
+    // { id, type: 'horizontal'|'vertical'|'arbitrary', inliers,
+    //   pose, extent: {u, v}, hull: [{u, v}, ...] }
+    const planes = argus.getPlanes();
+
+    // ray-cast a screen pixel onto the planes -> { planeId, pose } | null
+    const hit = argus.hitTest( x, y );
+
+    // 2D feature points of the current frame (for debug overlays)
+    const points = argus.getFramePoints();
+}
 ```
 
+Serve `argus_ar.js` and `argus_ar.wasm` from the same directory. Import the JS with a version tag (`argus_ar.js?v=123`) — it is automatically propagated to the `.wasm` request, so the pair always comes from the same build even through caches and CDNs.
+
+To run the examples locally:
+
+```
+python3 -m http.server 8123 --directory examples
+```
+
+Then open [http://localhost:8123/public/video_planes.html](http://localhost:8123/public/video_planes.html). The camera demo needs HTTPS (browser requirement for camera access) — use the GitHub Pages deployment or any TLS-terminating host.
 
 ## Build
 
-### Prerequisites
+Prerequisites:
 
-#### Emscripten
-Ensure [Emscripten](https://emscripten.org/docs/getting_started/Tutorial.html) is installed and activated in your session.
+- **Emscripten 3.1.40** (pinned — newer versions break the vendored dependencies):
+  ```
+  git clone https://github.com/emscripten-core/emsdk.git ~/Development/emsdk
+  cd ~/Development/emsdk && ./emsdk install 3.1.40 && ./emsdk activate 3.1.40
+  source ~/Development/emsdk/emsdk_env.sh
+  ```
+- CMake (with CMake ≥ 4: `export CMAKE_POLICY_VERSION_MINIMUM=3.5`), Python 3
 
-```
-    $: source [PATH]/emsdk/emsdk_env.sh 
-    $: emcc -v
-```
-
-#### C++11 or Higher
-Alva makes use of C++11 features and should thus be compiled with a C++11 or higher flag.
-
-### Dependencies
-
-| Dependency             | Description                                                                                                                                                                                                                                                                                                                                                                                                                         |
-|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Eigen3                 | Download Eigen 3.4. Find all releases [here](https://eigen.tuxfamily.org/index.php?title=Main_Page).This project has been tested with 3.4.0                                                                                                                                                                                                                                                                                         |
-| OpenCV                 | Download OpenCV 4.5. Find all releases [here](https://opencv.org/releases/).This project has been tested with [4.5.5](https://github.com/opencv/opencv/archive/4.5.5.zip).                                                                                                                                                                                                                                                          |
-| iBoW-LCD               | A modified version of [iBoW-LCD](https://github.com/emiliofidalgo/ibow-lcd) is included in the libs folder. It has been turned into a static shared lib. Same goes for [OBIndex2](https://github.com/emiliofidalgo/obindex2), the required dependency for iBoW-LCD. Check the lcdetector.h and lcdetector.cc files to see the modifications w.r.t. to the original code. Both CMakeList have been adjusted to work with Emscripten. |
-| Sophus                 | [Sophus](https://github.com/strasdat/Sophus) is used for _*SE(3), SO(3)*_ elements representation.                                                                                                                                                                                                                                                                                                                                  |
-| Ceres Solver           | [Ceres](https://github.com/ceres-solver/ceres-solver) is used for optimization related operations such as PnP, Bundle Adjustment or PoseGraph Optimization. Note that [Ceres dependencies](http://ceres-solver.org/installation.html) are still required.                                                                                                                                                                           |
-| OpenGV                 | [OpenGV](https://github.com/laurentkneip/opengv) is used for Multi-View-Geometry (MVG) operations.                                                                                                                                                                                                                                                                                                                                  |
-
-#### Build Dependencies
-For convenience, a copy of all required libraries has been included in the libs/ folder. Run the following script to compile all libraries to wasm modules which can be linked into the main project.
+Build the vendored dependencies (Eigen, OpenCV, Ceres, Sophus, OpenGV, OBIndex2, iBoW-LCD — one-time, ~40-60 min):
 
 ```
-    $: cd ./ArgusAR/src/libs/
-    $: ./build.sh
+cd src/libs
+./build.sh                     # scalar baseline -> build/
+BUILD_TYPE=SIMD ./build.sh     # SIMD variants   -> build_simd/
 ```
 
-#### Build Project
-
-Run the following in your shell before invoking emcmake or emmake:
+Then link the engine against the mixed set (scalar OpenCV + SIMD math libs — OpenCV 4.5.5's wasm SIMD kernels miscompile under modern LLVM; see CLAUDE.md):
 
 ```
-    $: [PATH]/emsdk/emsdk_env.sh
+cd src/libs && mkdir build_mix && ln -s ../build/opencv build_mix/opencv
+for lib in Sophus ceres-solver eigen ibow_lcd obindex2 opengv; do ln -s ../build_simd/$lib build_mix/$lib; done
+
+cd ../slam && mkdir build && cd build
+emcmake cmake .. -DLIBS_BUILD_FOLDER=../libs/build_mix
+emmake make install
 ```
 
-Then, run the following:
-
-```
-    $: cd ./ArgusAR/src/slam
-    $: mkdir build/
-    $: cd build/
-    $: emcmake cmake .. 
-    $: emmake make install
-```
-
-
-## Roadmap
-- [ ] Improve the initialisation phase to be more stable and predictable.
-- [ ] Move feature extraction and tracking to GPU.
-- [ ] Blend visual SLAM with IMU data to increase robustness. 
-
+Artifacts land in `dist/` and `examples/public/assets/`.
 
 ## License
 
-ArgusAR is released under the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.txt).  
-
-OV²SLAM and ORB-SLAM2 are both released under the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.txt). Please see 3rd party dependency licenses in libs/.
-
+ArgusAR is released under the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.txt), inherited from the projects it builds on. Third-party dependency licenses live in `src/libs/`.
 
 ## Credits
 
-Original author of AlvaAR, which this project is based on: Alan Ross ([@alan_ross](https://twitter.com/alan_ross), [alanross/AlvaAR](https://github.com/alanross/AlvaAR))  
-Built on [OV²SLAM](https://github.com/ov2slam/ov2slam) and [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2).
+ArgusAR began as a fork of [AlvaAR](https://github.com/alanross/AlvaAR) by Alan Ross ([@alan_ross](https://twitter.com/alan_ross)), which is itself a heavily modified version of [OV²SLAM](https://github.com/ov2slam/ov2slam) and [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2). The demo video and GIF above are from the original AlvaAR project.
