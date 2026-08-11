@@ -144,10 +144,53 @@
     <div id="splash"></div>
 </div>
 <script type="module">
+    import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
     import { Stats } from "./assets/stats.js";
     import { ArgusAR } from './assets/argus_ar.js';
+    import { ArgusARConnectorTHREE } from './assets/argus_ar_three.js';
     import { ARCamView } from "./assets/view.js";
     import { Camera, onFrame, resize2cover } from "./assets/utils.js";
+
+    const PALETTE = [ 0x4dabf7, 0x51cf66, 0xffd43b, 0xff6b6b, 0xb197fc, 0xf783ac, 0x63e6be, 0xffa94d ];
+
+    // world -> rendered frame uses the same flip as the pose connector
+    const flip = ( p ) => new THREE.Vector3( p.x, -p.y, -p.z );
+
+    function buildPlaneGroup( plane )
+    {
+        const color = PALETTE[plane.id % PALETTE.length];
+        const group = new THREE.Group();
+        group.planeViz = true;
+
+        if( plane.hull.length >= 3 )
+        {
+            const verts = plane.hull.map( flip );
+            const positions = [];
+
+            for( let i = 1; i < verts.length - 1; i++ )
+            {
+                positions.push( verts[0].x, verts[0].y, verts[0].z );
+                positions.push( verts[i].x, verts[i].y, verts[i].z );
+                positions.push( verts[i + 1].x, verts[i + 1].y, verts[i + 1].z );
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
+
+            group.add( new THREE.Mesh( geo, new THREE.MeshBasicMaterial( {
+                color: color,
+                transparent: true,
+                opacity: 0.25,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            } ) ) );
+
+            const outlineGeo = new THREE.BufferGeometry().setFromPoints( [ ...verts, verts[0] ] );
+            group.add( new THREE.Line( outlineGeo, new THREE.LineBasicMaterial( { color: color } ) ) );
+        }
+
+        return group;
+    }
 
     function main()
     {
@@ -186,6 +229,8 @@
             const argus = await ArgusAR.Initialize( $canvas.width, $canvas.height );
             const view = new ARCamView( $view, $canvas.width, $canvas.height );
 
+            const applyPose = ArgusARConnectorTHREE.Initialize( THREE );
+
             Stats.add( 'total' );
             Stats.add( 'video' );
             Stats.add( 'slam' );
@@ -194,7 +239,72 @@
             $container.appendChild( $view );
 
             document.body.appendChild( Stats.el );
-            document.body.addEventListener( "click", () => argus.reset(), false );
+
+            // plane HUD + reset button
+            const $hud = document.createElement( 'div' );
+            $hud.style.cssText = 'position:absolute;top:5px;right:5px;z-index:3;color:#fff;font:11px Arial;text-align:right;background:rgba(0,0,0,0.4);padding:5px;border-radius:4px;';
+            $hud.textContent = 'planes: –';
+            document.body.appendChild( $hud );
+
+            const $reset = document.createElement( 'button' );
+            $reset.textContent = 'Reset';
+            $reset.style.cssText = 'position:absolute;bottom:12px;left:12px;z-index:3;color:#fff;background:rgba(0,0,0,0.4);border:1px solid #fff;border-radius:4px;padding:8px 14px;';
+            $reset.addEventListener( 'click', ( e ) =>
+            {
+                e.stopPropagation();
+                argus.reset();
+                view.scene.children.filter( o => o.placed || o.planeViz ).forEach( o => view.scene.remove( o ) );
+            } );
+            document.body.appendChild( $reset );
+
+            const planeGroups = [];
+
+            function refreshPlanes()
+            {
+                const planes = argus.getPlanes();
+
+                planeGroups.forEach( g => view.scene.remove( g ) );
+                planeGroups.length = 0;
+
+                for( const plane of planes )
+                {
+                    const group = buildPlaneGroup( plane );
+                    view.scene.add( group );
+                    planeGroups.push( group );
+                }
+
+                $hud.innerHTML = ( planes.length === 0 )
+                                 ? 'planes: none yet'
+                                 : planes.map( p => `#${ p.id } ${ p.type } (${ p.inliers })` ).join( '<br/>' );
+            }
+
+            // tap to hit-test & place an object on a plane
+            $container.addEventListener( 'click', ( event ) =>
+            {
+                const hit = argus.hitTest( event.clientX, event.clientY );
+
+                if( hit )
+                {
+                    const s = 0.4;
+                    const base = new THREE.Mesh(
+                        new THREE.PlaneGeometry( s, s ),
+                        new THREE.MeshBasicMaterial( { color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.15 } )
+                    );
+                    const cube = new THREE.Mesh(
+                        new THREE.BoxGeometry( s * 0.25, s * 0.25, s * 0.25 ),
+                        new THREE.MeshNormalMaterial( { flatShading: true } )
+                    );
+                    cube.position.z = s * 0.125;
+                    base.add( cube );
+                    base.placed = true;
+
+                    applyPose( hit.pose, base.quaternion, base.position );
+                    view.scene.add( base );
+                    argus.createAnchor( hit.pose );
+                }
+            } );
+
+            let frameCount = 0;
 
             onFrame( () =>
             {
@@ -217,6 +327,11 @@
                     if( pose )
                     {
                         view.updateCameraPose( pose );
+
+                        if( ++frameCount % 10 === 0 )
+                        {
+                            refreshPlanes();
+                        }
                     }
                     else
                     {
@@ -254,7 +369,9 @@
         }, splashFadeTime );
     }
 
-    window.addEventListener( 'load', main );
+    // module scripts run after DOM parse; never wait for window 'load' — the
+    // CDN import above can finish after that event has already fired
+    main();
 </script>
 </body>
 </html>
