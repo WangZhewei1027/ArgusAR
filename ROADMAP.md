@@ -75,6 +75,7 @@ flowchart LR
 - 拆掉 `SINGLE_FILE`：`.wasm` 独立文件 + streaming instantiation；开 `-flto`
 - SLAM 移入 **Web Worker**（OffscreenCanvas 渲染特征点层），主线程只渲染
 - 建立**基准测试页**：ms/帧（分解到提取/跟踪/BA）、初始化成功率、内存曲线——之后每阶段用同一基准回归
+- **自适应质量控制器 v1**（从 Phase 5 提前到本阶段，对老机型体验决定性）：按滚动帧耗时动态调整采集分辨率与特征点上限，带迟滞防振荡
 - 验收：demo 帧率可量化提升，主线程不再被 SLAM 阻塞
 
 ### Phase 2 — 平面识别 v1（AI 运行 ~3–6 小时）★ 用户可感知的最大升级
@@ -142,9 +143,25 @@ flowchart LR
 | Depth Anything 模型体积（Small ~50MB ONNX） | 量化到 int8（~13MB）+ CDN 缓存 + 可选加载 |
 | pthreads 需要 COOP/COEP，第三方托管可能配不了响应头 | Service Worker 注入头的成熟 workaround + 单线程构建双发 |
 | 老依赖 + 新 emsdk 兼容性 | 已趟平一轮（cmake4 policy、eigen stub 等），锁定 emsdk 3.1.40 |
+| OpenCV 4.5.5 wasm SIMD 内核在新 LLVM 下结果错误（Phase 1 实测：跟踪率归零） | 生产用混合构建（OpenCV 标量+其余 SIMD）；根治=升级 OpenCV ≥4.7 或 Phase 5 GPU 前端直接替掉这些内核 |
 | GPLv3 | 商用需整体开源或重谈技术路线（如换 Basalt/BSD 系重写，代价大，默认不做） |
 
-## 6. 明确不做（本期）
+## 6. 设备支持矩阵（2026-08 核实）
+
+| 档位 | 技术路径 | 覆盖设备 | 目标体验 |
+|---|---|---|---|
+| Tier 1 全功能 | WebGPU + SIMD + 多线程 | iPhone 11+/SE2+（iOS 26），Android 12+ 中高端 | 30fps，全特性 |
+| Tier 2 标准 | WebGL2 + SIMD + 多线程 | iPhone 8–XR（iOS 16.4–18），Android 8+ 中端 | 24–30fps |
+| Tier 3 保底 | 纯 WASM SIMD 单线程 | 老旧浏览器、微信 XWeb | 降质 15–20fps，保平面+基础跟踪 |
+| 不支持 | — | iPhone 7 及更早（无 wasm SIMD）、iOS <16.4、无 WebGL2 | 明确提示，不静默失败 |
+
+- 支持线画在 **2017 年 iPhone 8 / Android 8**，再往前成本收益比急剧恶化
+- iPhone 由硬件锁死系统与 Safari 能力（XS/XR 止步 iOS 18 → 永无 WebGPU）；Android 浏览器常青，瓶颈是 SoC 性能，靠自适应降质兜底
+- WebGPU 需 Android 12+ 且 GPU 驱动过白名单；低端 Mali/Adreno 可能被 blocklist → 自动落 WebGL2
+- **微信内置浏览器**（Android XWeb / iOS WKWebView）行为不可查表，Phase 5/6 需真机实测专项
+- wasm 基线特性核实：SIMD128 全绿可硬性依赖；threads 需 COOP/COEP（GitHub Pages 不支持自定义头 → coi-serviceworker 或迁 Cloudflare Pages）；Relaxed SIMD 在 Safari 状态不明，不依赖
+
+## 7. 明确不做（本期）
 
 - 紧耦合 VIO 完整重写（VINS 级后端）——收益/成本比低于松耦合+深度网络组合
 - 稠密重建 / mesh 化 / 遮挡（occlusion）——属下一期

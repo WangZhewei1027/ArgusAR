@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1" name="viewport"/>
+    <title>AlvaAR Benchmark</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Helvetica', monospace, sans-serif;
+            font-size: 13px;
+            padding: 20px;
+            background: #fff;
+            color: #111;
+        }
+
+        h1 {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        #status {
+            margin: 10px 0;
+            color: #666;
+        }
+
+        table {
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        td, th {
+            border: 1px solid #ccc;
+            padding: 4px 10px;
+            text-align: right;
+        }
+
+        th {
+            background: #f5f5f5;
+        }
+
+        #json {
+            width: 100%;
+            height: 120px;
+            font: 11px monospace;
+            margin-top: 10px;
+        }
+
+        canvas {
+            outline: 1px solid #ddd;
+            max-width: 320px;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+<h1>AlvaAR Benchmark <span id="label"></span></h1>
+<div id="status">loading…</div>
+<div id="results"></div>
+<canvas id="preview"></canvas>
+<script type="module">
+    import { Video } from "./assets/utils.js";
+
+    // dynamic import with a version tag so a rebuilt wasm can never be masked
+    // by the browser's module/heuristic cache (?v=<anything-new>)
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || '0';
+    const { AlvaAR } = await import( `./assets/alva_ar.js?v=${ wasmVersion }` );
+
+    // Runs the full video once through SLAM on the main thread and reports
+    // per-frame timing stats. Use ?label=simd etc. to tag a run for comparison.
+
+    const percentile = ( sorted, p ) => sorted[Math.min( sorted.length - 1, Math.floor( sorted.length * p ) )];
+
+    async function main()
+    {
+        const label = new URLSearchParams( location.search ).get( 'label' ) || 'default';
+        document.getElementById( 'label' ).textContent = `[${ label }]`;
+
+        const $status = document.getElementById( 'status' );
+
+        const media = await Video.Initialize( './assets/video.mp4' );
+        const alva = await AlvaAR.Initialize( media.width, media.height );
+
+        const ctx = document.getElementById( 'preview' ).getContext( '2d', { willReadFrequently: true } );
+        ctx.canvas.width = media.width;
+        ctx.canvas.height = media.height;
+
+        const slamMs = [];
+        const captureMs = [];
+        let tracked = 0;
+
+        // Seek-driven loop: deterministic (every frame processed exactly once)
+        // and independent of page visibility — rAF is suspended in hidden tabs.
+        const fps = 30;
+
+        media.el.pause();
+        media.el.loop = false;
+
+        const seekTo = ( t ) => new Promise( ( resolve, reject ) =>
+        {
+            media.el.onseeked = () => resolve();
+            media.el.onerror = () => reject( new Error( 'video error while seeking' ) );
+            media.el.currentTime = t;
+        } );
+
+        for( let t = 0.001; t < media.el.duration; t += 1 / fps )
+        {
+            await seekTo( t );
+
+            let t0 = performance.now();
+            const frame = media.getImageData();
+            ctx.putImageData( frame, 0, 0 );
+            captureMs.push( performance.now() - t0 );
+
+            t0 = performance.now();
+            const pose = alva.findCameraPose( frame );
+            slamMs.push( performance.now() - t0 );
+
+            if( pose ) tracked++;
+
+            if( slamMs.length % 30 === 0 )
+            {
+                $status.textContent = `running… frame ${ slamMs.length }, tracked ${ tracked }`;
+            }
+        }
+
+        report();
+
+        function report()
+        {
+            const sorted = [...slamMs].sort( ( a, b ) => a - b );
+            const mean = slamMs.reduce( ( a, b ) => a + b, 0 ) / slamMs.length;
+
+            const result = {
+                label: label,
+                userAgent: navigator.userAgent,
+                resolution: `${ media.width }x${ media.height }`,
+                frames: slamMs.length,
+                trackedRatio: +( tracked / slamMs.length ).toFixed( 3 ),
+                slam: {
+                    meanMs: +mean.toFixed( 2 ),
+                    medianMs: +percentile( sorted, 0.5 ).toFixed( 2 ),
+                    p90Ms: +percentile( sorted, 0.9 ).toFixed( 2 ),
+                    p99Ms: +percentile( sorted, 0.99 ).toFixed( 2 ),
+                    maxMs: +sorted[sorted.length - 1].toFixed( 2 )
+                },
+                captureMeanMs: +( captureMs.reduce( ( a, b ) => a + b, 0 ) / captureMs.length ).toFixed( 2 ),
+                jsHeapMB: performance.memory ? +( performance.memory.usedJSHeapSize / 1048576 ).toFixed( 1 ) : null
+            };
+
+            $status.textContent = 'done';
+
+            document.getElementById( 'results' ).innerHTML = `
+                <table>
+                    <tr><th>frames</th><th>tracked</th><th>slam mean</th><th>median</th><th>p90</th><th>p99</th><th>max</th><th>capture</th></tr>
+                    <tr>
+                        <td>${ result.frames }</td>
+                        <td>${ ( result.trackedRatio * 100 ).toFixed( 1 ) }%</td>
+                        <td>${ result.slam.meanMs }ms</td>
+                        <td>${ result.slam.medianMs }ms</td>
+                        <td>${ result.slam.p90Ms }ms</td>
+                        <td>${ result.slam.p99Ms }ms</td>
+                        <td>${ result.slam.maxMs }ms</td>
+                        <td>${ result.captureMeanMs }ms</td>
+                    </tr>
+                </table>
+                <textarea id="json" readonly>${ JSON.stringify( result, null, 2 ) }</textarea>`;
+
+            document.title = `Bench done [${ label }]`;
+            window.__benchResult = result;
+        }
+    }
+
+    // module runs after DOM is parsed; do not wait for window 'load' — the
+    // top-level dynamic import above can delay us past that event
+    main();
+</script>
+</body>
+</html>

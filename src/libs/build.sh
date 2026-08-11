@@ -10,7 +10,7 @@ EMSCRIPTEN_DIR=~/Development/emsdk/upstream/emscripten
 EMSCRIPTEN_CMAKE_DIR=$EMSCRIPTEN_DIR/cmake/Modules/Platform/Emscripten.cmake
 
 # Sets the compile flags. [SIMD, THREADS, DEFAULT]
-BUILD_TYPE="DEFAULT"
+BUILD_TYPE="${BUILD_TYPE:-DEFAULT}"
 
 if [ $BUILD_TYPE = "SIMD" ]; then
   echo "Compiling with SIMD enabled"

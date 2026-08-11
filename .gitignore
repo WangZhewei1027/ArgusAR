@@ -16,3 +16,6 @@ cmake-build-debug/*
 
 .idea/
 *.iml
+
+# mixed libs variant (symlinks into build/ and build_simd/), recreate per CLAUDE.md
+src/libs/build_mix/

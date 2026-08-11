@@ -30,7 +30,12 @@ if (NOT DIST_DIR)
     set(DIST_DIR ${CMAKE_BINARY_DIR}/../../../dist)
 endif (NOT DIST_DIR)
 
-set(LIBS_BUILD_FOLDER "../libs/build")
+# Which prebuilt libs variant to link (build / build_simd / build_threads).
+# Override with: emcmake cmake .. -DLIBS_BUILD_FOLDER=../libs/build_simd
+if (NOT LIBS_BUILD_FOLDER)
+    set(LIBS_BUILD_FOLDER "../libs/build")
+endif ()
+message(STATUS "Linking libs from '${LIBS_BUILD_FOLDER}'")
 
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/calib3d/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/core/include/)
@@ -89,7 +94,6 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
       -s MODULARIZE=1 \
       -s EXPORT_ES6=1 \
       -s EXPORT_ALL=1 \
-      -s SINGLE_FILE=1 \
       -s ASSERTIONS=1 \
       -s DYLINK_DEBUG=1 \
       -s EXPORTED_FUNCTIONS=['_malloc'] \
@@ -116,7 +120,6 @@ else ()
       -s MODULARIZE=1 \
       -s EXPORT_ES6=1 \
       -s EXPORT_ALL=1 \
-      -s SINGLE_FILE=1 \
       -s ASSERTIONS=0 \
       -s DYLINK_DEBUG=0 \
       -s EXPORTED_FUNCTIONS=['_malloc'] \
@@ -137,3 +140,6 @@ unset(CMAKE_BUILD_TYPE CACHE)
 # Install command will only be run if calling "emmake make install"
 install(TARGETS ${PROJECT_NAME} DESTINATION ${DIST_DIR})
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_BINARY_DIR}/../../../examples/public/assets)
+# SINGLE_FILE is off: the .wasm is a separate artifact and must ship next to the .js
+install(FILES ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.wasm DESTINATION ${DIST_DIR})
+install(FILES ${CMAKE_BINARY_DIR}/${PROJECT_NAME}.wasm DESTINATION ${CMAKE_BINARY_DIR}/../../../examples/public/assets)

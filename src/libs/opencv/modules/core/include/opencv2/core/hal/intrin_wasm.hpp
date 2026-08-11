@@ -17,6 +17,11 @@
 namespace cv
 {
 
+// Modern emsdk no longer auto-defines __EMSCRIPTEN_major__ etc.; without them
+// every version guard below evaluates against 0 and selects pre-2019 intrinsic
+// names that current clang does not provide.
+#include <emscripten/version.h>
+
 //! @cond IGNORED
 
 CV_CPU_OPTIMIZATION_HAL_NAMESPACE_BEGIN
