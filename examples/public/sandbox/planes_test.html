@@ -22,7 +22,7 @@
     // manually-rendered three.js pass with pixel-level polygon counting
     // (no rAF anywhere — works in hidden panes).
 
-    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b3';
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b4';
     const { ArgusAR } = await import( `../assets/argus_ar.js?v=${ wasmVersion }` );
 
     const PALETTE = [ 0x4dabf7, 0x51cf66, 0xffd43b, 0xff6b6b, 0xb197fc, 0xf783ac, 0x63e6be, 0xffa94d ];

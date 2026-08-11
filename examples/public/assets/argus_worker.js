@@ -29,7 +29,7 @@ self.onmessage = async ( event ) =>
             {
                 // dynamic import with version tag so a rebuilt wasm is never
                 // masked by the browser's module cache
-                ( { ArgusAR } = await import( `./argus_ar.js?v=${ msg.v || 'b3' }` ) );
+                ( { ArgusAR } = await import( `./argus_ar.js?v=${ msg.v || 'b4' }` ) );
             }
 
             // Re-initialize on resolution change: System.configure() and the shared
