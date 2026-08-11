@@ -220,7 +220,8 @@ class ArgusAR
      * Returns [{ id, type: 'horizontal'|'vertical'|'arbitrary', inliers,
      *            pose: Float32Array(16),        // column-major, Y = plane normal
      *            extent: { u, v },              // size in world units
-     *            hull: [{x, y, z}, ...] }]      // world-space boundary polygon
+     *            hull: [{u, v}, ...] }]         // boundary polygon in plane-local
+     *                                           // coords; world = pose * (u, 0, v)
      */
     getPlanes()
     {
@@ -248,7 +249,7 @@ class ArgusAR
 
             for( let h = 0; h < hullCount; h++ )
             {
-                hull[h] = { x: data[offset++], y: data[offset++], z: data[offset++] };
+                hull[h] = { u: data[offset++], v: data[offset++] };
             }
 
             planes.push( { id, type, inliers, pose, extent, hull } );

@@ -11,15 +11,51 @@
 </head>
 <body>
 <div id="out">running…</div>
-<canvas id="cv" style="display:none"></canvas>
+<div id="viz" style="position:relative; margin-top:10px;"></div>
 <script type="module">
+    import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
     import { Video } from "../assets/utils.js";
+    import { ArgusARConnectorTHREE } from '../assets/argus_ar_three.js';
 
     // Deterministic, visibility-independent verification of the Phase 2 plane
-    // pipeline: seek-driven playback -> SLAM -> getPlanes/hitTest.
+    // pipeline: seek-driven playback -> SLAM -> getPlanes/hitTest, plus a
+    // manually-rendered three.js pass with pixel-level polygon counting
+    // (no rAF anywhere — works in hidden panes).
 
     const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || '0';
     const { ArgusAR } = await import( `../assets/argus_ar.js?v=${ wasmVersion }` );
+
+    const PALETTE = [ 0x4dabf7, 0x51cf66, 0xffd43b, 0xff6b6b, 0xb197fc, 0xf783ac, 0x63e6be, 0xffa94d ];
+    const applyPose = ArgusARConnectorTHREE.Initialize( THREE );
+
+    function buildPlaneGroup( plane )
+    {
+        const color = PALETTE[plane.id % PALETTE.length];
+        const group = new THREE.Group();
+        group.planeViz = true;
+
+        if( plane.hull.length >= 3 )
+        {
+            const verts = plane.hull.map( p => new THREE.Vector3( p.u, 0, p.v ) );
+            const positions = [];
+
+            for( let i = 1; i < verts.length - 1; i++ )
+            {
+                positions.push( verts[0].x, verts[0].y, verts[0].z );
+                positions.push( verts[i].x, verts[i].y, verts[i].z );
+                positions.push( verts[i + 1].x, verts[i + 1].y, verts[i + 1].z );
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
+
+            group.add( new THREE.Mesh( geo, new THREE.MeshBasicMaterial( { color: color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false } ) ) );
+        }
+
+        applyPose( plane.pose, group.quaternion, group.position );
+
+        return group;
+    }
 
     const $out = document.getElementById( 'out' );
 
@@ -35,6 +71,30 @@
         media.el.currentTime = t;
     } );
 
+    // manual three.js pass, rendered per-frame without rAF
+    const renderer = new THREE.WebGLRenderer( { antialias: false, alpha: true, preserveDrawingBuffer: true } );
+    renderer.setClearColor( 0, 0 );
+    renderer.setSize( media.width, media.height );
+
+    const camera3 = new THREE.PerspectiveCamera( 75, media.width / media.height, 0.1, 1000 );
+    camera3.rotation.reorder( 'YXZ' );
+
+    const scene = new THREE.Scene();
+    scene.add( camera3 );
+
+    const $viz = document.getElementById( 'viz' );
+    const vidCanvas = document.createElement( 'canvas' );
+    vidCanvas.width = media.width;
+    vidCanvas.height = media.height;
+    const vidCtx = vidCanvas.getContext( '2d' );
+    vidCanvas.style.cssText = 'position:absolute;top:0;left:0;';
+    renderer.domElement.style.cssText = 'position:absolute;top:0;left:0;';
+    $viz.style.height = media.height + 'px';
+    $viz.appendChild( vidCanvas );
+    $viz.appendChild( renderer.domElement );
+
+    let planeGroups = [];
+
     const fps = 30;
     const timeline = [];
     let tracked = 0;
@@ -47,12 +107,20 @@
         const frame = media.getImageData();
         const pose = argus.findCameraPose( frame );
 
-        if( pose ) tracked++;
+        if( pose )
+        {
+            tracked++;
+            applyPose( pose, camera3.quaternion, camera3.position );
+        }
+
         frames++;
 
         if( frames % 10 === 0 )
         {
             const planes = argus.getPlanes();
+
+            planeGroups.forEach( g => scene.remove( g ) );
+            planeGroups = planes.map( p => { const g = buildPlaneGroup( p ); scene.add( g ); return g; } );
 
             timeline.push( {
                 frame: frames,
@@ -64,7 +132,27 @@
                 $out.textContent = `frame ${ frames }, planes: ${ planes.length }`;
             }
         }
+
+        vidCtx.putImageData( frame, 0, 0 );
+        renderer.render( scene, camera3 );
     }
+
+    // pixel-level check: how much of the final render is plane-colored
+    const shot = document.createElement( 'canvas' );
+    shot.width = media.width;
+    shot.height = media.height;
+    const shotCtx = shot.getContext( '2d' );
+    shotCtx.drawImage( renderer.domElement, 0, 0 );
+    const px = shotCtx.getImageData( 0, 0, shot.width, shot.height ).data;
+
+    let coloredPixels = 0;
+
+    for( let i = 0; i < px.length; i += 4 )
+    {
+        if( px[i + 3] > 30 ) coloredPixels++;
+    }
+
+    const coloredRatio = coloredPixels / ( shot.width * shot.height );
 
     const finalPlanes = argus.getPlanes();
 
@@ -91,6 +179,7 @@
     const result = {
         frames: frames,
         trackedRatio: +( tracked / frames ).toFixed( 3 ),
+        renderedPlanePixelRatio: +coloredRatio.toFixed( 4 ),
         finalPlanes: finalPlanes.map( p => ( {
             id: p.id, type: p.type, inliers: p.inliers,
             hullPoints: p.hull.length,

@@ -210,12 +210,13 @@ int System::getPlanes(int planesPtr)
 
         data[offset++] = (float) plane.hull_.size();
 
+        // hull in plane-local (u, v) coords: world = centroid + u*axisU + v*axisV,
+        // i.e. local (u, 0, v) under the serialized pose — render hulls by
+        // applying the pose exactly like any other pose, no hand-rolled flips
         for (const auto &uv : plane.hull_)
         {
-            const Eigen::Vector3d p = plane.hullPointWorld(uv);
-            data[offset++] = (float) p.x();
-            data[offset++] = (float) p.y();
-            data[offset++] = (float) p.z();
+            data[offset++] = (float) uv.x();
+            data[offset++] = (float) uv.y();
         }
     }
 

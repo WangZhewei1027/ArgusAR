@@ -89,12 +89,14 @@
     const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || '0';
     const { ArgusAR } = await import( `./assets/argus_ar.js?v=${ wasmVersion }` );
     import { Video, onFrame } from "./assets/utils.js";
+    import { ArgusARConnectorTHREE } from './assets/argus_ar_three.js';
 
     const PALETTE = [ 0x4dabf7, 0x51cf66, 0xffd43b, 0xff6b6b, 0xb197fc, 0xf783ac, 0x63e6be, 0xffa94d ];
 
-    // world -> rendered frame uses the same flip as the pose connector
-    const flip = ( p ) => new THREE.Vector3( p.x, -p.y, -p.z );
+    const applyPose = ArgusARConnectorTHREE.Initialize( THREE );
 
+    // Hull is in plane-local (u, v) coords; build local geometry on the XZ
+    // plane and place the group via the same applyPose pathway as any object.
     function buildPlaneGroup( plane )
     {
         const color = PALETTE[plane.id % PALETTE.length];
@@ -103,7 +105,7 @@
 
         if( plane.hull.length >= 3 )
         {
-            const verts = plane.hull.map( flip );
+            const verts = plane.hull.map( p => new THREE.Vector3( p.u, 0, p.v ) );
 
             // triangle fan around the hull
             const positions = [];
@@ -133,6 +135,8 @@
             group.add( fill );
             group.add( outline );
         }
+
+        applyPose( plane.pose, group.quaternion, group.position );
 
         return group;
     }
