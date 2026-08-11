@@ -16,6 +16,7 @@ EMSCRIPTEN_BINDINGS(Module)
         .function("findCameraPose", &System::findCameraPose, allow_raw_pointers())
         .function("findPlane", &System::findPlane)
         .function("getPlanes", &System::getPlanes)
+        .function("getLoopClosureCount", &System::getLoopClosureCount)
         .function("hitTest", &System::hitTest)
         .function("getFramePoints", &System::getFramePoints);
 }

@@ -47,10 +47,14 @@ include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/imgproc/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/objdetect/include/)
 include_directories(${LIBS_BUILD_FOLDER}/../opencv/modules/video/include/)
 include_directories(${LIBS_BUILD_FOLDER}/opencv/)
+# minimal opencv umbrella shim (opencv2/opencv.hpp) for obindex2
+include_directories(shim)
 include_directories(${LIBS_BUILD_FOLDER}/opengv/include/)
 include_directories(${LIBS_BUILD_FOLDER}/eigen/include/eigen3)
 include_directories(${LIBS_BUILD_FOLDER}/Sophus/include/)
 include_directories(${LIBS_BUILD_FOLDER}/ceres-solver/include/)
+include_directories(${LIBS_BUILD_FOLDER}/ibow_lcd/include/)
+include_directories(${LIBS_BUILD_FOLDER}/obindex2/include/)
 include_directories(src)
 
 # Add the project source files
@@ -70,15 +74,19 @@ file(GLOB LIB_CERES
         "${LIBS_BUILD_FOLDER}/ceres-solver/lib/libceres.a")
 file(GLOB LIB_OPENGV
         "${LIBS_BUILD_FOLDER}/opengv/lib/libopengv.a")
+file(GLOB LIB_LCD
+        "${LIBS_BUILD_FOLDER}/ibow_lcd/liblcdetector.a"
+        "${LIBS_BUILD_FOLDER}/obindex2/libobindex2.a")
 
-# hide warnings
-set_source_files_properties(${SRC_FILES} PROPERTIES COMPILE_FLAGS "-w")
+# hide warnings; obindex2 headers need the emscripten boost-headers port
+set_source_files_properties(${SRC_FILES} PROPERTIES COMPILE_FLAGS "-w -s USE_BOOST_HEADERS=1")
 
 # Link third party libraries
 target_link_libraries(${PROJECT_NAME}
         ${LIB_OPENCV}
         ${LIB_CERES}
-        ${LIB_OPENGV})
+        ${LIB_OPENGV}
+        ${LIB_LCD})
 
 # Specify compile arguments
 # https://emscripten.org/docs/optimizing/Optimizing-Code.html

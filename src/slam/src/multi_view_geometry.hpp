@@ -42,6 +42,23 @@ public:
             std::vector<int> &outliersIndices
     );
 
+    // Homography-based two-view pose recovery for planar / low-parallax
+    // scenes where the essential matrix degenerates. Returns the pose of
+    // view 2 relative to view 1 (same convention as the essential path)
+    // plus the RANSAC inlier count for model selection.
+    static bool computeHomographyPose(
+            const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations1,
+            const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations2,
+            const int maxIterations,
+            const float errorThreshold,
+            const float fx,
+            const float fy,
+            Eigen::Matrix3d &Rwc,
+            Eigen::Vector3d &twc,
+            std::vector<int> &outliersIndices,
+            int &numInliers
+    );
+
     static bool compute5ptEssentialMatrix(
             const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations1,
             const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations2,

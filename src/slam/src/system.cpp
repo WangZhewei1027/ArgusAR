@@ -39,6 +39,8 @@ void System::configure(int imageWidth, int imageHeight, double fx, double fy, do
     visualFrontend_ = std::make_unique<VisualFrontend>(state_, currFrame_, mapManager_, mapper_, featureTracker_);
 
     planeManager_ = std::make_unique<PlaneManager>();
+    loopCloser_ = std::make_unique<LoopCloser>(state_, mapManager_);
+    prevKeyframeCount_ = 0;
 }
 
 void System::reset()
@@ -58,6 +60,12 @@ void System::reset()
         planeManager_->reset();
     }
 
+    if (loopCloser_)
+    {
+        loopCloser_->reset();
+    }
+
+    prevKeyframeCount_ = 0;
     prevTranslation_.setZero();
 }
 
@@ -161,6 +169,11 @@ int System::getFramePoints(int pointsPtr)
     }
 
     return n;
+}
+
+int System::getLoopClosureCount()
+{
+    return loopCloser_ ? loopCloser_->numLoopClosures_ : 0;
 }
 
 static void writePlanePose(const DetectedPlane &plane, const Eigen::Vector3d &position, float *out)
@@ -280,6 +293,28 @@ int System::processCameraPose(cv::Mat &image, double timestamp)
     {
         return 3;
     }
+
+    // loop closing: feed every freshly created keyframe to the BoW index
+    const size_t keyframeCount = mapManager_->mapKeyframes_.size();
+
+    if (keyframeCount > prevKeyframeCount_ && loopCloser_)
+    {
+        const int newestKfId = currFrame_->keyframeId_;
+
+        if (loopCloser_->onNewKeyframe(newestKfId))
+        {
+            // pose graph moved the keyframes; re-align the live frame with
+            // its (corrected) reference keyframe
+            auto kfIt = mapManager_->mapKeyframes_.find(newestKfId);
+
+            if (kfIt != mapManager_->mapKeyframes_.end() && kfIt->second != nullptr)
+            {
+                currFrame_->setTwc(kfIt->second->getTwc());
+            }
+        }
+    }
+
+    prevKeyframeCount_ = keyframeCount;
 
     return 1;
 }
