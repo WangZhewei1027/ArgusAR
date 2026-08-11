@@ -137,6 +137,9 @@ else ()
 endif ()
 unset(CMAKE_BUILD_TYPE CACHE)
 
+# system.js is injected at link time (--extern-post-js); relink when it changes
+set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../system.js")
+
 # Install command will only be run if calling "emmake make install"
 install(TARGETS ${PROJECT_NAME} DESTINATION ${DIST_DIR})
 install(TARGETS ${PROJECT_NAME} DESTINATION ${CMAKE_BINARY_DIR}/../../../examples/public/assets)

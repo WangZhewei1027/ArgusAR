@@ -28,7 +28,10 @@ emcmake cmake .. && emmake make install -j6   # → dist/argus_ar.{js,wasm} + ex
 - `src/libs/eigen/scripts/buildtests.in` 是我们补的 stub（上游裁剪丢失），被 eigen 自身 gitignore 误伤，改动它需 `git add -f`。
 - SIMD 重编：`BUILD_TYPE=SIMD ./build.sh`（环境变量注入；产物在 build_simd/）；多线程同理 `THREADS` → build_threads/。
 - **重要发现（2026-08）**：OpenCV 4.5.5 `--simd` 的手写 wasm 内核（intrin_wasm.hpp）在 emsdk 3.1.40 下**结果错误**（SLAM 跟踪率 0%）。`intrin_wasm.hpp` 已打补丁（补 `#include <emscripten/version.h>`，修版本宏失效），可编译通过，但 SIMD 路径运行时仍不正确。**生产构建用混合方案**：OpenCV 取 build/（标量），其余 6 库取 build_simd/——`src/libs/build_mix/` 放符号链接（gitignored，按此重建），主项目 `emcmake cmake .. -DLIBS_BUILD_FOLDER=../libs/build_mix`。根治靠升级 vendored OpenCV ≥4.7 或 Phase 5 GPU 前端替掉这些内核。
-- 主项目现输出**拆分产物**：`argus_ar.js`（~130KB）+ `argus_ar.wasm`（~4MB），两者必须同目录部署。JS API 类名为 `ArgusAR`，wasm 工厂 `ArgusARWasm`，worker 为 `assets/argus_worker.js`。基准页 `examples/public/bench.html?label=X&v=Y`（v 是防缓存版本号，改了 wasm 必须换新值）。
+- 主项目现输出**拆分产物**：`argus_ar.js`（~130KB）+ `argus_ar.wasm`（~4MB），两者必须同目录部署。JS API 类名为 `ArgusAR`，wasm 工厂 `ArgusARWasm`，worker 为 `assets/argus_worker.js`。
+- **js/wasm 版本锁定**：system.js 会把自己 URL 的 `?查询串` 通过 locateFile 传给 wasm 请求，两者永远同版本；所有 demo 以 `?v=<tag>` 引入 argus_ar.js，默认 tag 统一写死在各 demo（当前 `b3`）——**改动 wasm/system.js 后必须全局把 tag 升一号**（防 CDN/浏览器缓存拿到新旧混搭，症状=静默无渲染）。
+- **CMake 已把 `src/system.js` 声明为 LINK_DEPENDS**：只改 system.js 也会触发重链。此前只改 system.js 不重链、install 却刷新 mtime，产物看似新实为旧，极难察觉。
+- demo 验收标准：`video_planes.html?drive=seek&v=<新tag>`（seek 驱动确定性回放，不依赖页面可见性；隐藏面板中 rAF/video.play 均被浏览器挂起，绝不能用普通模式做自动化验收）。基准页 `examples/public/bench.html?label=X&v=Y`（v 是防缓存版本号，改了 wasm 必须换新值）。
 
 ## 验证
 

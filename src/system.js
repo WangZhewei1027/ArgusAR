@@ -48,7 +48,25 @@ class ArgusAR
     {
         const wasm = {};
 
-        wasm.ready = ArgusARWasm().then( module => wasm.module = module );
+        // Propagate our own ?v= cache-buster to the .wasm fetch: the .js and
+        // .wasm are separate cache entries, and a stale/fresh mismatch between
+        // them silently corrupts the shared-memory protocol.
+        const config = {};
+
+        try
+        {
+            const query = import.meta.url.split( '?' )[1];
+
+            if( query )
+            {
+                config.locateFile = ( path, prefix ) => prefix + path + '?' + query;
+            }
+        }
+        catch( e )
+        {
+        }
+
+        wasm.ready = ArgusARWasm( config ).then( module => wasm.module = module );
 
         await wasm.ready;
 

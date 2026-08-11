@@ -86,7 +86,7 @@
     import { Stats } from "./assets/stats.js";
     import { ARSimpleView, ARSimpleMap } from "./assets/view.js";
 
-    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || '0';
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b3';
     const { ArgusAR } = await import( `./assets/argus_ar.js?v=${ wasmVersion }` );
     import { Video, onFrame } from "./assets/utils.js";
     import { ArgusARConnectorTHREE } from './assets/argus_ar_three.js';
@@ -195,6 +195,7 @@
                              : planes.map( p => `#${ p.id } ${ p.type } (${ p.inliers } pts)` ).join( '<br/>' );
         }
 
+        // the single interaction: click on the video = hit-test & place
         $cam.addEventListener( 'click', ( event ) =>
         {
             const el = camRenderer.renderer.domElement;
@@ -207,24 +208,14 @@
             if( hit )
             {
                 camRenderer.createObjectWithPose( hit.pose, 0.5 );
-                argus.createAnchor( hit.pose );
             }
         } );
 
         $cam.parentElement.style.display = 'block';
 
-        media.el.play();
-        media.el.loop = false;
-        media.el.onended = () =>
-        {
-            media.el.load();
-            media.el.play();
-            camRenderer.reset();
-        };
-
         let frameCount = 0;
 
-        onFrame( () =>
+        function processFrame()
         {
             Stats.next();
             Stats.start( 'total' );
@@ -262,7 +253,43 @@
             Stats.render();
 
             return true;
-        }, 30 );
+        }
+
+        if( new URLSearchParams( location.search ).get( 'drive' ) === 'seek' )
+        {
+            // deterministic acceptance mode: seek-driven, works without rAF
+            // and page visibility (the normal mode below is throttled/paused
+            // by the browser in hidden panes)
+            media.el.pause();
+            media.el.loop = false;
+
+            const seekTo = ( t ) => new Promise( ( resolve ) =>
+            {
+                media.el.onseeked = () => resolve();
+                media.el.currentTime = t;
+            } );
+
+            for( let t = 0.001; t < media.el.duration; t += 1 / 30 )
+            {
+                await seekTo( t );
+                processFrame();
+            }
+
+            document.title = 'Planes video demo DONE';
+        }
+        else
+        {
+            media.el.play();
+            media.el.loop = false;
+            media.el.onended = () =>
+            {
+                media.el.load();
+                media.el.play();
+                camRenderer.reset();
+            };
+
+            onFrame( processFrame, 30 );
+        }
     }
 
     main();

@@ -69,7 +69,7 @@
 
     // dynamic import with a version tag so a rebuilt wasm can never be masked
     // by the browser's module/heuristic cache (?v=<anything-new>)
-    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || '0';
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b3';
     const { ArgusAR } = await import( `./assets/argus_ar.js?v=${ wasmVersion }` );
 
     // Runs the full video once through SLAM on the main thread and reports
