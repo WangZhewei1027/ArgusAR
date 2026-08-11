@@ -12,6 +12,7 @@
 #include "frame.hpp"
 #include "mapper.hpp"
 #include "map_manager.hpp"
+#include "loop_closer.hpp"
 #include "plane_detector.hpp"
 #include "state.hpp"
 #include "utils.hpp"
@@ -49,6 +50,9 @@ public:
 
     int getFramePoints(int pointsPtr);
 
+    // number of successfully closed loops since start/reset
+    int getLoopClosureCount();
+
 private:
     cv::Mat processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3d Twc, int numIterations = 50);
 
@@ -63,6 +67,8 @@ private:
     std::shared_ptr<FeatureExtractor> featureExtractor_;
     std::shared_ptr<FeatureTracker> featureTracker_;
     std::unique_ptr<PlaneManager> planeManager_;
+    std::unique_ptr<LoopCloser> loopCloser_;
+    size_t prevKeyframeCount_ = 0;
 
     Eigen::Vector3d currTranslation_;
     Eigen::Vector3d prevTranslation_;

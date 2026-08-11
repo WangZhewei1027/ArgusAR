@@ -315,6 +315,12 @@ class ArgusAR
         this.anchors.delete( id );
     }
 
+    /** Number of successfully closed loops since start/reset. */
+    getLoopClosureCount()
+    {
+        return this.system.getLoopClosureCount();
+    }
+
     getFramePoints()
     {
         const numPoints = this.system.getFramePoints( this.memPts.ptr );

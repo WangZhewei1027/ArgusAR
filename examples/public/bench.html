@@ -93,6 +93,7 @@
 
         const slamMs = [];
         const captureMs = [];
+        const trackedFlags = [];
         let tracked = 0;
 
         // Seek-driven loop: deterministic (every frame processed exactly once)
@@ -123,6 +124,7 @@
             slamMs.push( performance.now() - t0 );
 
             if( pose ) tracked++;
+            trackedFlags.push( pose ? 1 : 0 );
 
             if( slamMs.length % 30 === 0 )
             {
@@ -151,6 +153,13 @@
                     maxMs: +sorted[sorted.length - 1].toFixed( 2 )
                 },
                 captureMeanMs: +( captureMs.reduce( ( a, b ) => a + b, 0 ) / captureMs.length ).toFixed( 2 ),
+                // run-length encoding of the tracked/lost timeline: [state, count, ...]
+                trackedRuns: trackedFlags.reduce( ( runs, f ) =>
+                {
+                    if( runs.length && runs[runs.length - 2] === f ) runs[runs.length - 1]++;
+                    else runs.push( f, 1 );
+                    return runs;
+                }, [] ),
                 jsHeapMB: performance.memory ? +( performance.memory.usedJSHeapSize / 1048576 ).toFixed( 1 ) : null
             };
 

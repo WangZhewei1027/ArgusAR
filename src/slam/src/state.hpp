@@ -34,7 +34,10 @@ public:
     bool slamReadyForInit_ = false;
     bool slamResetRequested_ = false;
 
-    float minAvgRotationParallax_ = 40.0;
+    // Initialization parallax gate (px). 40 was safe for essential-only init;
+    // with dual-model H/F init a lower gate still yields a sound pose while
+    // cutting time-to-init substantially.
+    float minAvgRotationParallax_ = 25.0;
 
     int frameMaxNumKeypoints_;
     int frameMaxCellSize_ = 35;

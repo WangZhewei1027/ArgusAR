@@ -274,9 +274,11 @@
                     planeGroups.push( group );
                 }
 
-                $hud.innerHTML = ( planes.length === 0 )
-                                 ? 'planes: none yet'
-                                 : planes.map( p => `#${ p.id } ${ p.type } (${ p.inliers })` ).join( '<br/>' );
+                const planeList = ( planes.length === 0 )
+                                  ? 'planes: none yet'
+                                  : planes.map( p => `#${ p.id } ${ p.type } (${ p.inliers })` ).join( '<br/>' );
+
+                $hud.innerHTML = planeList + `<br/>loops: ${ argus.getLoopClosureCount() }`;
             }
 
             // tap to hit-test & place an object on a plane

@@ -1,5 +1,7 @@
 #include "multi_view_geometry.hpp"
 #include "ceres_parametrization.hpp"
+#include <opencv2/calib3d.hpp>
+#include <opencv2/core/eigen.hpp>
 #include <opengv/types.hpp>
 #include <opengv/triangulation/methods.hpp>
 #include <opengv/sac/Ransac.hpp>
@@ -313,6 +315,183 @@ bool MultiViewGeometry::compute5ptEssentialMatrix(
         else
         {
             outliersIndices.push_back(i);
+        }
+    }
+
+    return true;
+}
+
+bool MultiViewGeometry::computeHomographyPose(
+        const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations1,
+        const std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d> > &observations2,
+        const int maxIterations,
+        const float errorThreshold,
+        const float fx,
+        const float fy,
+        Eigen::Matrix3d &Rwc,
+        Eigen::Vector3d &twc,
+        std::vector<int> &outliersIndices,
+        int &numInliers)
+{
+    const size_t numPoints = observations1.size();
+
+    numInliers = 0;
+
+    if (numPoints < 8)
+    {
+        return false;
+    }
+
+    // bearing vectors -> normalized image plane coordinates
+    std::vector<cv::Point2f> pts1, pts2;
+    pts1.reserve(numPoints);
+    pts2.reserve(numPoints);
+
+    for (size_t i = 0; i < numPoints; i++)
+    {
+        pts1.emplace_back(observations1[i].x() / observations1[i].z(), observations1[i].y() / observations1[i].z());
+        pts2.emplace_back(observations2[i].x() / observations2[i].z(), observations2[i].y() / observations2[i].z());
+    }
+
+    // pixel threshold -> normalized plane threshold
+    const double threshold = errorThreshold / (0.5 * (fx + fy));
+
+    cv::Mat inlierMask;
+    cv::Mat H = cv::findHomography(pts1, pts2, cv::RANSAC, threshold, inlierMask, maxIterations);
+
+    if (H.empty())
+    {
+        return false;
+    }
+
+    std::vector<int> inlierIdx;
+
+    for (size_t i = 0; i < numPoints; i++)
+    {
+        if (inlierMask.at<uchar>((int) i))
+        {
+            inlierIdx.push_back((int) i);
+        }
+    }
+
+    numInliers = (int) inlierIdx.size();
+
+    if (numInliers < 8)
+    {
+        return false;
+    }
+
+    // decompose H (K = I on the normalized plane) and pick the physically
+    // valid solution by cheirality + parallax over the inliers
+    std::vector<cv::Mat> Rs, ts, normals;
+    cv::decomposeHomographyMat(H, cv::Mat::eye(3, 3, CV_64F), Rs, ts, normals);
+
+    int bestCount = 0;
+    int secondCount = 0;
+    int bestSolution = -1;
+
+    std::vector<char> bestValid;
+
+    for (size_t s = 0; s < Rs.size(); s++)
+    {
+        Eigen::Matrix3d R21;
+        Eigen::Vector3d t21;
+        cv::cv2eigen(Rs[s], R21);
+        cv::cv2eigen(ts[s], t21);
+
+        if (t21.norm() < 1e-8)
+        {
+            continue; // pure-rotation solution: no baseline to triangulate
+        }
+
+        int count = 0;
+        std::vector<char> valid(inlierIdx.size(), 0);
+
+        for (size_t k = 0; k < inlierIdx.size(); k++)
+        {
+            const int i = inlierIdx[k];
+
+            // linear triangulation in cam1 frame
+            const Eigen::Vector3d bv1 = observations1[i].normalized();
+            const Eigen::Vector3d bv2 = observations2[i].normalized();
+
+            // parallax gate: rays must not be near-parallel
+            const Eigen::Vector3d ray2in1 = R21.transpose() * bv2;
+
+            if (bv1.dot(ray2in1) > 0.99995)
+            {
+                continue;
+            }
+
+            // midpoint triangulation
+            Eigen::Matrix<double, 3, 2> A;
+            A.col(0) = bv1;
+            A.col(1) = -ray2in1;
+            const Eigen::Vector2d lambda = A.colPivHouseholderQr().solve(-R21.transpose() * t21);
+
+            if (lambda(0) <= 0.0)
+            {
+                continue; // behind cam1
+            }
+
+            const Eigen::Vector3d p1 = lambda(0) * bv1;
+            const Eigen::Vector3d p2 = R21 * p1 + t21;
+
+            if (p2.z() <= 0.0)
+            {
+                continue; // behind cam2
+            }
+
+            valid[k] = 1;
+            count++;
+        }
+
+        if (count > bestCount)
+        {
+            secondCount = bestCount;
+            bestCount = count;
+            bestSolution = (int) s;
+            bestValid = valid;
+        }
+        else if (count > secondCount)
+        {
+            secondCount = count;
+        }
+    }
+
+    // require a clearly winning, well-supported solution
+    if (bestSolution < 0 || bestCount < 8 || bestCount < (int) (0.7 * numInliers) || secondCount > (int) (0.75 * bestCount))
+    {
+        return false;
+    }
+
+    Eigen::Matrix3d R21;
+    Eigen::Vector3d t21;
+    cv::cv2eigen(Rs[bestSolution], R21);
+    cv::cv2eigen(ts[bestSolution], t21);
+
+    // pose of view 2 in view-1(world) frame, matching the essential path
+    Rwc = R21.transpose();
+    twc = -R21.transpose() * t21;
+
+    // outliers = RANSAC outliers + cheirality failures
+    outliersIndices.clear();
+
+    std::vector<char> keep(numPoints, 0);
+
+    for (size_t k = 0; k < inlierIdx.size(); k++)
+    {
+        if (bestValid[k])
+        {
+            keep[inlierIdx[k]] = 1;
+        }
+    }
+
+    for (size_t i = 0; i < numPoints; i++)
+    {
+        if (!keep[i])
+        {
+            outliersIndices.push_back((int) i);
         }
     }
 

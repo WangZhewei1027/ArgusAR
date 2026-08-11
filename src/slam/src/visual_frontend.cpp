@@ -509,12 +509,16 @@ bool VisualFrontend::checkReadyForInit()
         return false;
     }
 
-    Eigen::Matrix3d Rwc;
-    Eigen::Vector3d twc;
-    Rwc.setIdentity();
-    twc.setZero();
+    // Dual-model initialization (ORB-SLAM2 style): evaluate both the 5-pt
+    // essential matrix and a homography. The essential matrix degenerates on
+    // planar scenes (desks, walls, floors) exactly where a homography excels.
+    Eigen::Matrix3d RwcE, RwcH;
+    Eigen::Vector3d twcE, twcH;
+    RwcE.setIdentity();
+    twcE.setZero();
+    std::vector<int> outliersE, outliersH;
 
-    bool success = MultiViewGeometry::compute5ptEssentialMatrix(
+    bool successE = MultiViewGeometry::compute5ptEssentialMatrix(
             vkfbvs,
             vcurbvs,
             state_->multiViewRansacNumIterations_,
@@ -523,15 +527,54 @@ bool VisualFrontend::checkReadyForInit()
             state_->multiViewRandomEnabled_,
             currFrame_->cameraCalibration_->fx_,
             currFrame_->cameraCalibration_->fy_,
-            Rwc,
-            twc,
-            outliersIndices);
+            RwcE,
+            twcE,
+            outliersE);
 
-    if (!success)
+    int numInliersH = 0;
+    bool successH = MultiViewGeometry::computeHomographyPose(
+            vkfbvs,
+            vcurbvs,
+            state_->multiViewRansacNumIterations_,
+            state_->multiViewRansacError_,
+            currFrame_->cameraCalibration_->fx_,
+            currFrame_->cameraCalibration_->fy_,
+            RwcH,
+            twcH,
+            outliersH,
+            numInliersH);
+
+    const int numInliersE = successE ? (int) (vkfbvs.size() - outliersE.size()) : 0;
+
+    Eigen::Matrix3d Rwc;
+    Eigen::Vector3d twc;
+
+    // pick homography when it explains clearly more matches (planar scene)
+    // or when the essential matrix failed outright
+    const bool useH = successH && ( !successE || numInliersH > (int) (1.15 * numInliersE) );
+
+    if (useH)
+    {
+        Rwc = RwcH;
+        twc = twcH;
+        outliersIndices = outliersH;
+
+        if (state_->debug_)
+        {
+            std::cout << "- [Visual-Frontend]: Init via HOMOGRAPHY (" << numInliersH << " vs E " << numInliersE << ")" << std::endl;
+        }
+    }
+    else if (successE)
+    {
+        Rwc = RwcE;
+        twc = twcE;
+        outliersIndices = outliersE;
+    }
+    else
     {
         if (state_->debug_)
         {
-            std::cout << "- [Visual-Frontend]: CheckReady - 5-pt Essential Matrix failed" << std::endl;
+            std::cout << "- [Visual-Frontend]: CheckReady - both Essential and Homography init failed" << std::endl;
         }
 
         return false;
