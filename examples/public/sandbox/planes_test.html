@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>ArgusAR Planes Pipeline Test</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        body { font: 12px monospace; padding: 16px; }
+        #out { white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+<div id="out">running…</div>
+<canvas id="cv" style="display:none"></canvas>
+<script type="module">
+    import { Video } from "../assets/utils.js";
+
+    // Deterministic, visibility-independent verification of the Phase 2 plane
+    // pipeline: seek-driven playback -> SLAM -> getPlanes/hitTest.
+
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || '0';
+    const { ArgusAR } = await import( `../assets/argus_ar.js?v=${ wasmVersion }` );
+
+    const $out = document.getElementById( 'out' );
+
+    const media = await Video.Initialize( '../assets/video.mp4' );
+    const argus = await ArgusAR.Initialize( media.width, media.height );
+
+    media.el.pause();
+    media.el.loop = false;
+
+    const seekTo = ( t ) => new Promise( ( resolve ) =>
+    {
+        media.el.onseeked = () => resolve();
+        media.el.currentTime = t;
+    } );
+
+    const fps = 30;
+    const timeline = [];
+    let tracked = 0;
+    let frames = 0;
+
+    for( let t = 0.001; t < media.el.duration; t += 1 / fps )
+    {
+        await seekTo( t );
+
+        const frame = media.getImageData();
+        const pose = argus.findCameraPose( frame );
+
+        if( pose ) tracked++;
+        frames++;
+
+        if( frames % 10 === 0 )
+        {
+            const planes = argus.getPlanes();
+
+            timeline.push( {
+                frame: frames,
+                planes: planes.map( p => ( { id: p.id, type: p.type, inliers: p.inliers, hull: p.hull.length } ) )
+            } );
+
+            if( frames % 60 === 0 )
+            {
+                $out.textContent = `frame ${ frames }, planes: ${ planes.length }`;
+            }
+        }
+    }
+
+    const finalPlanes = argus.getPlanes();
+
+    // hit-test a grid of pixels; count hits
+    const hits = [];
+
+    for( const [ px, py ] of [ [ 0.5, 0.5 ], [ 0.5, 0.75 ], [ 0.25, 0.6 ], [ 0.75, 0.6 ], [ 0.5, 0.25 ] ] )
+    {
+        const hit = argus.hitTest( px * media.width, py * media.height );
+        hits.push( hit ? { at: [ px, py ], planeId: hit.planeId, pos: [ +hit.pose[12].toFixed( 3 ), +hit.pose[13].toFixed( 3 ), +hit.pose[14].toFixed( 3 ) ] } : { at: [ px, py ], planeId: 0 } );
+    }
+
+    // id stability: how often did each id appear across the timeline
+    const idSeen = {};
+
+    for( const snap of timeline )
+    {
+        for( const p of snap.planes )
+        {
+            idSeen[p.id] = ( idSeen[p.id] || 0 ) + 1;
+        }
+    }
+
+    const result = {
+        frames: frames,
+        trackedRatio: +( tracked / frames ).toFixed( 3 ),
+        finalPlanes: finalPlanes.map( p => ( {
+            id: p.id, type: p.type, inliers: p.inliers,
+            hullPoints: p.hull.length,
+            extent: { u: +p.extent.u.toFixed( 3 ), v: +p.extent.v.toFixed( 3 ) },
+            normalY: +p.pose[5].toFixed( 3 )
+        } ) ),
+        idPersistence: idSeen,
+        snapshots: timeline.length,
+        hitTests: hits
+    };
+
+    window.__result = result;
+    $out.textContent = 'DONE\n' + JSON.stringify( result, null, 2 );
+    document.title = 'Planes Test DONE';
+</script>
+</body>
+</html>

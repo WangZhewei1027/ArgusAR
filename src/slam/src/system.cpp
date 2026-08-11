@@ -37,6 +37,8 @@ void System::configure(int imageWidth, int imageHeight, double fx, double fy, do
     mapper_ = std::make_shared<Mapper>(state_, mapManager_, currFrame_);
 
     visualFrontend_ = std::make_unique<VisualFrontend>(state_, currFrame_, mapManager_, mapper_, featureTracker_);
+
+    planeManager_ = std::make_unique<PlaneManager>();
 }
 
 void System::reset()
@@ -50,6 +52,11 @@ void System::reset()
     visualFrontend_->reset();
     mapManager_->reset();
     state_->reset();
+
+    if (planeManager_)
+    {
+        planeManager_->reset();
+    }
 
     prevTranslation_.setZero();
 }
@@ -140,8 +147,11 @@ int System::getFramePoints(int pointsPtr)
 {
     auto *data = reinterpret_cast<int *>(pointsPtr);
 
+    // buffer holds 4096 ints = 2048 (x, y) pairs; cap both the iteration and
+    // the reported count (the old code iterated numPoints * 2 and read past
+    // the end of the keypoint vector)
     int numPoints = currFrame_->getKeypoints2d().size();
-    int n = std::min(numPoints * 2, 4096);
+    int n = std::min(numPoints, 2048);
 
     for (int i = 0, j = 0; i < n; ++i)
     {
@@ -150,7 +160,106 @@ int System::getFramePoints(int pointsPtr)
         data[j++] = (int) p.y;
     }
 
-    return numPoints;
+    return n;
+}
+
+static void writePlanePose(const DetectedPlane &plane, const Eigen::Vector3d &position, float *out)
+{
+    // columns: X = axisU, Y = normal, Z = axisV, T = position (column-major,
+    // same layout as Utils::toPoseArray)
+    const Eigen::Vector3d &u = plane.axisU_;
+    const Eigen::Vector3d &n = plane.normal_;
+    const Eigen::Vector3d &v = plane.axisV_;
+
+    out[0] = (float) u.x(); out[1] = (float) u.y(); out[2] = (float) u.z(); out[3] = 0.0f;
+    out[4] = (float) n.x(); out[5] = (float) n.y(); out[6] = (float) n.z(); out[7] = 0.0f;
+    out[8] = (float) v.x(); out[9] = (float) v.y(); out[10] = (float) v.z(); out[11] = 0.0f;
+    out[12] = (float) position.x(); out[13] = (float) position.y(); out[14] = (float) position.z(); out[15] = 1.0f;
+}
+
+int System::getPlanes(int planesPtr)
+{
+    auto *data = reinterpret_cast<float *>(planesPtr);
+
+    if (planeManager_ == nullptr || currFrame_ == nullptr)
+    {
+        data[0] = 0;
+        return 0;
+    }
+
+    if (state_->slamReadyForInit_)
+    {
+        planeManager_->update(mapManager_->getCurrentFrameMapPoints(), currFrame_->getTwc().translation());
+    }
+
+    const auto &planes = planeManager_->planes();
+
+    int offset = 1;
+
+    for (const auto &plane : planes)
+    {
+        data[offset++] = (float) plane.id_;
+        data[offset++] = (float) plane.type_;
+        data[offset++] = (float) plane.inlierCount_;
+
+        writePlanePose(plane, plane.centroid_, data + offset);
+        offset += 16;
+
+        data[offset++] = (float) plane.extentU_;
+        data[offset++] = (float) plane.extentV_;
+
+        data[offset++] = (float) plane.hull_.size();
+
+        for (const auto &uv : plane.hull_)
+        {
+            const Eigen::Vector3d p = plane.hullPointWorld(uv);
+            data[offset++] = (float) p.x();
+            data[offset++] = (float) p.y();
+            data[offset++] = (float) p.z();
+        }
+    }
+
+    data[0] = (float) planes.size();
+
+    return (int) planes.size();
+}
+
+int System::hitTest(float x, float y, int posePtr)
+{
+    auto *poseData = reinterpret_cast<float *>(posePtr);
+
+    if (planeManager_ == nullptr || currFrame_ == nullptr)
+    {
+        return 0;
+    }
+
+    const Sophus::SE3d Twc = currFrame_->getTwc();
+
+    const Eigen::Vector3d origin = Twc.translation();
+    const Eigen::Vector3d dirCam(
+            (x - cameraCalibration_->cx_) / cameraCalibration_->fx_,
+            (y - cameraCalibration_->cy_) / cameraCalibration_->fy_,
+            1.0);
+    const Eigen::Vector3d dir = (Twc.rotationMatrix() * dirCam).normalized();
+
+    Eigen::Vector3d hitPoint;
+    const int planeId = planeManager_->hitTest(origin, dir, hitPoint);
+
+    if (planeId == 0)
+    {
+        return 0;
+    }
+
+    for (const auto &plane : planeManager_->planes())
+    {
+        if (plane.id_ == planeId)
+        {
+            writePlanePose(plane, hitPoint, poseData);
+            break;
+        }
+    }
+
+    return planeId;
 }
 
 int System::processCameraPose(cv::Mat &image, double timestamp)

@@ -62,6 +62,10 @@ class ArgusAR
 
         this.memCam = new SharedMemory( wasm.module, wasm.module.HEAPF32, 16 );
         this.memObj = new SharedMemory( wasm.module, wasm.module.HEAPF32, 16 );
+        this.memHit = new SharedMemory( wasm.module, wasm.module.HEAPF32, 16 );
+        this.memPlanes = new SharedMemory( wasm.module, wasm.module.HEAPF32, 4096 );
+        this.anchors = new Map();
+        this.nextAnchorId = 1;
         this.memPts = new SharedMemory( wasm.module, wasm.module.HEAPU32, 4096 );
         this.memIMU = new SharedMemory( wasm.module, wasm.module.HEAPF64, 256 );
         this.memImg = new SharedMemory( wasm.module, wasm.module.HEAPU8, width * height * 4 );
@@ -209,6 +213,87 @@ class ArgusAR
         }
 
         return null;
+    }
+
+    /**
+     * All persistently tracked planes.
+     * Returns [{ id, type: 'horizontal'|'vertical'|'arbitrary', inliers,
+     *            pose: Float32Array(16),        // column-major, Y = plane normal
+     *            extent: { u, v },              // size in world units
+     *            hull: [{x, y, z}, ...] }]      // world-space boundary polygon
+     */
+    getPlanes()
+    {
+        const numPlanes = this.system.getPlanes( this.memPlanes.ptr );
+
+        const TYPE = [ 'horizontal', 'vertical', 'arbitrary' ];
+        const data = this.memPlanes.read( 4096 );
+        const planes = [];
+
+        let offset = 1;
+
+        for( let i = 0; i < numPlanes; i++ )
+        {
+            const id = data[offset++];
+            const type = TYPE[data[offset++]] || 'arbitrary';
+            const inliers = data[offset++];
+
+            const pose = new Float32Array( data.subarray( offset, offset + 16 ) );
+            offset += 16;
+
+            const extent = { u: data[offset++], v: data[offset++] };
+
+            const hullCount = data[offset++];
+            const hull = new Array( hullCount );
+
+            for( let h = 0; h < hullCount; h++ )
+            {
+                hull[h] = { x: data[offset++], y: data[offset++], z: data[offset++] };
+            }
+
+            planes.push( { id, type, inliers, pose, extent, hull } );
+        }
+
+        return planes;
+    }
+
+    /**
+     * Ray-cast a screen/image pixel against the tracked planes.
+     * Returns { planeId, pose: Float32Array(16) } or null.
+     * x, y are in image pixel coordinates (same space as the input frames).
+     */
+    hitTest( x, y )
+    {
+        const planeId = this.system.hitTest( x, y, this.memHit.ptr );
+
+        if( planeId === 0 )
+        {
+            return null;
+        }
+
+        return { planeId: planeId, pose: new Float32Array( this.memHit.read( 16 ) ) };
+    }
+
+    /**
+     * Store a world-space pose as an anchor. Returns the anchor id.
+     * Note: until relocalization/loop-closure lands, anchors are static
+     * world poses; they do not self-correct after tracking drift.
+     */
+    createAnchor( pose )
+    {
+        const id = this.nextAnchorId++;
+        this.anchors.set( id, new Float32Array( pose ) );
+        return id;
+    }
+
+    getAnchor( id )
+    {
+        return this.anchors.get( id ) || null;
+    }
+
+    removeAnchor( id )
+    {
+        this.anchors.delete( id );
     }
 
     getFramePoints()

@@ -12,6 +12,7 @@
 #include "frame.hpp"
 #include "mapper.hpp"
 #include "map_manager.hpp"
+#include "plane_detector.hpp"
 #include "state.hpp"
 #include "utils.hpp"
 #include "visual_frontend.hpp"
@@ -35,6 +36,17 @@ public:
 
     int findPlane(int locationPtr, int numIterations);
 
+    // Multi-plane detection: updates the persistent PlaneManager from current
+    // map points and serializes all tracked planes into planesPtr (floats).
+    // Layout: [count, {id, type, inliers, pose[16], extentU, extentV,
+    //                  hullCount, hull xyz * hullCount} ...]
+    int getPlanes(int planesPtr);
+
+    // Ray-cast screen pixel (x, y) against tracked planes. Writes a pose
+    // (plane orientation, position = hit point) into posePtr.
+    // Returns the plane id, or 0 on miss.
+    int hitTest(float x, float y, int posePtr);
+
     int getFramePoints(int pointsPtr);
 
 private:
@@ -50,6 +62,7 @@ private:
     std::unique_ptr<VisualFrontend> visualFrontend_;
     std::shared_ptr<FeatureExtractor> featureExtractor_;
     std::shared_ptr<FeatureTracker> featureTracker_;
+    std::unique_ptr<PlaneManager> planeManager_;
 
     Eigen::Vector3d currTranslation_;
     Eigen::Vector3d prevTranslation_;
