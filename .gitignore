@@ -21,3 +21,4 @@ cmake-build-debug/*
 src/libs/build_mix/
 tour_frames/
 # regenerate test frames: ffmpeg -i examples/public/assets/tour.mp4 -q:v 5 examples/public/assets/tour_frames/f_%04d.jpg
+examples/public/assets/*_frames/
