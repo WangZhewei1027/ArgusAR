@@ -37,7 +37,7 @@ build_OPENCV() {
   rm -rf $INSTALL_DIR/opencv/
   rm -rf $LIB_ROOT/opencv/build
 
-  python $LIB_ROOT/opencv/platforms/js/build_js.py $LIB_ROOT/opencv/build --build_wasm $CONF_OPENCV --emscripten_dir $EMSCRIPTEN_DIR
+  python3 $LIB_ROOT/opencv/platforms/js/build_js.py $LIB_ROOT/opencv/build --build_wasm $CONF_OPENCV --emscripten_dir $EMSCRIPTEN_DIR
   cp -r $LIB_ROOT/opencv/build $INSTALL_DIR/opencv/
 }
 
@@ -55,7 +55,7 @@ build_EIGEN() {
     -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
     -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/eigen/ \
     -DBUILD_SHARED_LIBS=OFF
-  emmake make -j install
+  emmake make -j6 install
 }
 
 build_OBINDEX2() {
@@ -73,7 +73,7 @@ build_OBINDEX2() {
     -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/obindex2/ \
     -DBUILD_SHARED_LIBS=OFF \
     -DOpenCV_DIR=$LIB_ROOT/opencv/build/
-  emmake make -j install
+  emmake make -j6 install
 }
 
 build_IBOW_LCD(){
@@ -91,7 +91,7 @@ build_IBOW_LCD(){
     -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/ibow_lcd/ \
     -DBUILD_SHARED_LIBS=OFF \
     -DOpenCV_DIR=$LIB_ROOT/opencv/build/
-  emmake make -j install
+  emmake make -j6 install
 }
 
 build_SOPHUS(){
@@ -109,7 +109,7 @@ build_SOPHUS(){
     -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/Sophus/ \
     -DBUILD_SHARED_LIBS=OFF \
     -DEIGEN3_INCLUDE_DIR=$LIB_ROOT/eigen/
-  emmake make -j install
+  emmake make -j6 install
 }
 
 build_CERES(){
@@ -125,8 +125,8 @@ build_CERES(){
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_CXX_STANDARD=17 \
     -DCMAKE_TOOLCHAIN_FILE=$EMSCRIPTEN_CMAKE_DIR \
-    -DCMAKE_CXX_FLAGS="${BUILD_FLAGS} -march=native" \
-    -DCMAKE_C_FLAGS="${BUILD_FLAGS} -march=native" \
+    -DCMAKE_CXX_FLAGS="${BUILD_FLAGS}" \
+    -DCMAKE_C_FLAGS="${BUILD_FLAGS}" \
     -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/ceres-solver/ \
     -DBUILD_SHARED_LIBS=OFF \
     -DBUILD_EXAMPLES:BOOL=0 \
@@ -135,7 +135,7 @@ build_CERES(){
     -DCERES_THREADING_MODEL="NO_THREADS" \
     -DMINIGLOG:BOOL=1 \
     -DEigen3_DIR=$LIB_ROOT/eigen/build/
-  emmake make -j install
+  emmake make -j6 install
   find $INSTALL_DIR/ceres-solver/include -type f -name '*.h' -exec sed -i '' s#glog/logging.h#ceres/internal/miniglog/glog/logging.h#g {} +
 }
 
@@ -154,7 +154,7 @@ build_OPENGV(){
     -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/opengv/ \
     -DBUILD_SHARED_LIBS=OFF \
     -DEIGEN_INCLUDE_DIR=$LIB_ROOT/eigen/
-  emmake make -j install
+  emmake make -j6 install
 }
 
 build() {
