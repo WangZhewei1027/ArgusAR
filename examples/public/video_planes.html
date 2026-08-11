@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
+    <title>ArgusAR Planes</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            font-family: 'Helvetica', sans-serif;
+            width: 100vw;
+            height: 100vh;
+            font-size: 12px;
+            background: #fff;
+        }
+
+        #container {
+            padding-bottom: 50px;
+            text-align: center;
+            display: none;
+            position: relative;
+        }
+
+        #container::after {
+            content: "Click on the video to hit-test & place an object on a detected plane";
+            text-align: center;
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+        }
+
+        #container > div {
+            display: inline-flex;
+            vertical-align: top;
+            margin: 100px 15px 0 15px;
+            position: relative;
+            outline: 1px solid #d20000;
+        }
+
+        #container > div > canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+        }
+
+        #container > div > canvas:first-child {
+            display: inline-block;
+            position: relative;
+        }
+
+        .tracking #container > div {
+            outline: 1px solid #bebebe;
+        }
+
+        #planes-hud {
+            background: rgba(255, 255, 255, 0.85);
+            position: absolute;
+            top: 0;
+            right: 0;
+            color: #111;
+            font: 10px Arial, sans-serif;
+            padding: 6px;
+            text-align: right;
+            min-width: 130px;
+        }
+    </style>
+</head>
+<body>
+<div id="container">
+    <div id="renderer-cam">
+        <canvas id="renderer-video"></canvas>
+    </div>
+    <div id="renderer-map"></div>
+</div>
+<div id="planes-hud">planes: –</div>
+<script type="module">
+    import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
+    import { Stats } from "./assets/stats.js";
+    import { ARSimpleView, ARSimpleMap } from "./assets/view.js";
+
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || '0';
+    const { ArgusAR } = await import( `./assets/argus_ar.js?v=${ wasmVersion }` );
+    import { Video, onFrame } from "./assets/utils.js";
+
+    const PALETTE = [ 0x4dabf7, 0x51cf66, 0xffd43b, 0xff6b6b, 0xb197fc, 0xf783ac, 0x63e6be, 0xffa94d ];
+
+    // world -> rendered frame uses the same flip as the pose connector
+    const flip = ( p ) => new THREE.Vector3( p.x, -p.y, -p.z );
+
+    function buildPlaneGroup( plane )
+    {
+        const color = PALETTE[plane.id % PALETTE.length];
+        const group = new THREE.Group();
+        group.planeViz = true;
+
+        if( plane.hull.length >= 3 )
+        {
+            const verts = plane.hull.map( flip );
+
+            // triangle fan around the hull
+            const positions = [];
+
+            for( let i = 1; i < verts.length - 1; i++ )
+            {
+                positions.push( verts[0].x, verts[0].y, verts[0].z );
+                positions.push( verts[i].x, verts[i].y, verts[i].z );
+                positions.push( verts[i + 1].x, verts[i + 1].y, verts[i + 1].z );
+            }
+
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
+            geo.computeVertexNormals();
+
+            const fill = new THREE.Mesh( geo, new THREE.MeshBasicMaterial( {
+                color: color,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            } ) );
+
+            const outlineGeo = new THREE.BufferGeometry().setFromPoints( [ ...verts, verts[0] ] );
+            const outline = new THREE.Line( outlineGeo, new THREE.LineBasicMaterial( { color: color } ) );
+
+            group.add( fill );
+            group.add( outline );
+        }
+
+        return group;
+    }
+
+    async function main()
+    {
+        document.body.appendChild( Stats.el );
+        Stats.add( 'total' );
+        Stats.add( 'slam' );
+        Stats.add( 'planes' );
+
+        const media = await Video.Initialize( './assets/video.mp4' );
+        const argus = await ArgusAR.Initialize( media.width, media.height );
+
+
+        const $cam = document.getElementById( 'renderer-cam' );
+        const $map = document.getElementById( 'renderer-map' );
+        const $hud = document.getElementById( 'planes-hud' );
+        const ctx = document.getElementById( 'renderer-video' ).getContext( '2d' );
+
+        ctx.canvas.width = media.width;
+        ctx.canvas.height = media.height;
+
+        const mapRenderer = new ARSimpleMap( $map, media.width, media.height );
+        const camRenderer = new ARSimpleView( $cam, media.width, media.height, mapRenderer );
+
+        const planeGroups = new Map(); // id -> [camGroup, mapGroup]
+
+        function refreshPlanes()
+        {
+            Stats.start( 'planes' );
+            const planes = argus.getPlanes();
+            Stats.stop( 'planes' );
+
+            for( const [ , groups ] of planeGroups )
+            {
+                camRenderer.scene.remove( groups[0] );
+                mapRenderer.scene.remove( groups[1] );
+            }
+
+            planeGroups.clear();
+
+            for( const plane of planes )
+            {
+                const camGroup = buildPlaneGroup( plane );
+                const mapGroup = camGroup.clone();
+
+                camRenderer.scene.add( camGroup );
+                mapRenderer.scene.add( mapGroup );
+
+                planeGroups.set( plane.id, [ camGroup, mapGroup ] );
+            }
+
+            $hud.innerHTML = ( planes.length === 0 )
+                             ? 'planes: none yet'
+                             : planes.map( p => `#${ p.id } ${ p.type } (${ p.inliers } pts)` ).join( '<br/>' );
+        }
+
+        $cam.addEventListener( 'click', ( event ) =>
+        {
+            const el = camRenderer.renderer.domElement;
+            const rect = el.getBoundingClientRect();
+            const x = ( event.clientX - rect.left ) / rect.width * media.width;
+            const y = ( event.clientY - rect.top ) / rect.height * media.height;
+
+            const hit = argus.hitTest( x, y );
+
+            if( hit )
+            {
+                camRenderer.createObjectWithPose( hit.pose, 0.5 );
+                argus.createAnchor( hit.pose );
+            }
+        } );
+
+        $cam.parentElement.style.display = 'block';
+
+        media.el.play();
+        media.el.loop = false;
+        media.el.onended = () =>
+        {
+            media.el.load();
+            media.el.play();
+            camRenderer.reset();
+        };
+
+        let frameCount = 0;
+
+        onFrame( () =>
+        {
+            Stats.next();
+            Stats.start( 'total' );
+
+            const frame = media.getImageData();
+            ctx.clearRect( 0, 0, media.width, media.height );
+            ctx.putImageData( frame, 0, 0 );
+
+            Stats.start( 'slam' );
+            const pose = argus.findCameraPose( frame );
+            Stats.stop( 'slam' );
+
+            if( pose )
+            {
+                camRenderer.updateCameraPose( pose );
+            }
+            else
+            {
+                camRenderer.lostCamera();
+
+                ctx.fillStyle = 'white';
+
+                for( const p of argus.getFramePoints() )
+                {
+                    ctx.fillRect( p.x, p.y, 2, 2 );
+                }
+            }
+
+            if( ++frameCount % 10 === 0 )
+            {
+                refreshPlanes();
+            }
+
+            Stats.stop( 'total' );
+            Stats.render();
+
+            return true;
+        }, 30 );
+    }
+
+    main();
+</script>
+</body>
+</html>

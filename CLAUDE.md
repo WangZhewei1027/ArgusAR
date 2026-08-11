@@ -39,6 +39,6 @@ emcmake cmake .. && emmake make install -j6   # → dist/argus_ar.{js,wasm} + ex
 ## 关键代码位置
 
 - SLAM 入口/绑定：`src/slam/src/system.cpp`、`embind.cpp`；JS 包装：`src/system.js`（编译时经 --extern-post-js 注入）
-- 平面检测（待重写）：`system.cpp` 的 `processPlane`（现状：单平面 RANSAC、仅水平面、无持久化）
+- 平面检测（Phase 2 已完成）：`plane_detector.hpp/cpp` 的 PlaneManager——顺序 RANSAC 多平面、ID 持久化+EMA 平滑+淘汰、凸包边界；System::getPlanes/hitTest 序列化到共享内存，JS 端 `getPlanes()/hitTest()/createAnchor()`。旧的 `processPlane`/`findPlane` 保留兼容。管线回归测试页：`examples/public/sandbox/planes_test.html?v=N`（seek 驱动，不依赖页面可见性；注意隐藏页面里 video.play() 会被浏览器节能暂停，rAF 也会挂起——验证一律用 seek 驱动页）。平面分类（horizontal/vertical）相对初始相机系，Phase 4 接入重力后才是真实方向。
 - IMU（现状为空壳，数据被丢弃）：`system.cpp` 的 `findCameraPoseWithIMU`
 - 回环检测库已编译未接入：`src/libs/ibow_lcd`、`obindex2`
