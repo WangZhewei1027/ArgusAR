@@ -21,14 +21,14 @@
 ```
 cd src/libs && ./build.sh          # 全部 7 个依赖 → build/*.a，约 40–60 分钟
 cd ../slam && mkdir -p build && cd build
-emcmake cmake .. && emmake make install -j6   # → dist/alva_ar.js + examples/public/assets/alva_ar.js
+emcmake cmake .. && emmake make install -j6   # → dist/argus_ar.{js,wasm} + examples/public/assets/argus_ar.{js,wasm}
 ```
 
 - 依赖库产物 `src/libs/build/` 被 gitignore（`build/*`），每个新环境需重编一次，之后增量很快。
 - `src/libs/eigen/scripts/buildtests.in` 是我们补的 stub（上游裁剪丢失），被 eigen 自身 gitignore 误伤，改动它需 `git add -f`。
 - SIMD 重编：`BUILD_TYPE=SIMD ./build.sh`（环境变量注入；产物在 build_simd/）；多线程同理 `THREADS` → build_threads/。
 - **重要发现（2026-08）**：OpenCV 4.5.5 `--simd` 的手写 wasm 内核（intrin_wasm.hpp）在 emsdk 3.1.40 下**结果错误**（SLAM 跟踪率 0%）。`intrin_wasm.hpp` 已打补丁（补 `#include <emscripten/version.h>`，修版本宏失效），可编译通过，但 SIMD 路径运行时仍不正确。**生产构建用混合方案**：OpenCV 取 build/（标量），其余 6 库取 build_simd/——`src/libs/build_mix/` 放符号链接（gitignored，按此重建），主项目 `emcmake cmake .. -DLIBS_BUILD_FOLDER=../libs/build_mix`。根治靠升级 vendored OpenCV ≥4.7 或 Phase 5 GPU 前端替掉这些内核。
-- 主项目现输出**拆分产物**：`alva_ar.js`（~130KB）+ `alva_ar.wasm`（~4MB），两者必须同目录部署。基准页 `examples/public/bench.html?label=X&v=Y`（v 是防缓存版本号，改了 wasm 必须换新值）。
+- 主项目现输出**拆分产物**：`argus_ar.js`（~130KB）+ `argus_ar.wasm`（~4MB），两者必须同目录部署。JS API 类名为 `ArgusAR`，wasm 工厂 `ArgusARWasm`，worker 为 `assets/argus_worker.js`。基准页 `examples/public/bench.html?label=X&v=Y`（v 是防缓存版本号，改了 wasm 必须换新值）。
 
 ## 验证
 

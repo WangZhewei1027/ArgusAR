@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
     <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
-    <title>AlvaAR Video</title>
+    <title>ArgusAR Video</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
         * {
@@ -107,7 +107,7 @@
 </div>
 <script type="module">
     import { Stats } from "./assets/stats.js";
-    import { AlvaAR } from './assets/alva_ar.js';
+    import { ArgusAR } from './assets/argus_ar.js';
     import { ARSimpleView, ARSimpleMap } from "./assets/view.js";
     import { Video, onFrame } from "./assets/utils.js";
 
@@ -119,7 +119,7 @@
         Stats.add( 'slam' );
 
         const media = await Video.Initialize( './assets/video.mp4' );
-        const alva = await AlvaAR.Initialize( media.width, media.height );
+        const argus = await ArgusAR.Initialize( media.width, media.height );
 
         const $cam = document.getElementById( 'renderer-cam' );
         const $map = document.getElementById( 'renderer-map' );
@@ -157,7 +157,7 @@
             Stats.stop( 'video' );
 
             Stats.start( 'slam' );
-            const pose = alva.findCameraPose( frame );
+            const pose = argus.findCameraPose( frame );
             Stats.stop( 'slam' );
 
             if( pose )
@@ -166,7 +166,7 @@
 
                 if( doFindPlane )
                 {
-                    const planePose = alva.findPlane();
+                    const planePose = argus.findPlane();
 
                     if( planePose )
                     {
@@ -179,7 +179,7 @@
             {
                 camRenderer.lostCamera();
 
-                const dots = alva.getFramePoints();
+                const dots = argus.getFramePoints();
 
                 for( const p of dots )
                 {

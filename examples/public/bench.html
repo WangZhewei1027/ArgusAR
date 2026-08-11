@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1" name="viewport"/>
-    <title>AlvaAR Benchmark</title>
+    <title>ArgusAR Benchmark</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
         * {
@@ -60,7 +60,7 @@
     </style>
 </head>
 <body>
-<h1>AlvaAR Benchmark <span id="label"></span></h1>
+<h1>ArgusAR Benchmark <span id="label"></span></h1>
 <div id="status">loading…</div>
 <div id="results"></div>
 <canvas id="preview"></canvas>
@@ -70,7 +70,7 @@
     // dynamic import with a version tag so a rebuilt wasm can never be masked
     // by the browser's module/heuristic cache (?v=<anything-new>)
     const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || '0';
-    const { AlvaAR } = await import( `./assets/alva_ar.js?v=${ wasmVersion }` );
+    const { ArgusAR } = await import( `./assets/argus_ar.js?v=${ wasmVersion }` );
 
     // Runs the full video once through SLAM on the main thread and reports
     // per-frame timing stats. Use ?label=simd etc. to tag a run for comparison.
@@ -85,7 +85,7 @@
         const $status = document.getElementById( 'status' );
 
         const media = await Video.Initialize( './assets/video.mp4' );
-        const alva = await AlvaAR.Initialize( media.width, media.height );
+        const argus = await ArgusAR.Initialize( media.width, media.height );
 
         const ctx = document.getElementById( 'preview' ).getContext( '2d', { willReadFrequently: true } );
         ctx.canvas.width = media.width;
@@ -119,7 +119,7 @@
             captureMs.push( performance.now() - t0 );
 
             t0 = performance.now();
-            const pose = alva.findCameraPose( frame );
+            const pose = argus.findCameraPose( frame );
             slamMs.push( performance.now() - t0 );
 
             if( pose ) tracked++;

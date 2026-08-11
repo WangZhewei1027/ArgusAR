@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.1)
-set(PROJECT_NAME "alva_ar")
+set(PROJECT_NAME "argus_ar")
 project(${PROJECT_NAME})
 
 # Use C++ 17 by default
@@ -86,7 +86,7 @@ target_link_libraries(${PROJECT_NAME}
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     message(STATUS "Compile in DEBUG mode")
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "\
-      -s EXPORT_NAME='AlvaARWasm' \
+      -s EXPORT_NAME='ArgusARWasm' \
       -s ENVIRONMENT=web,worker \
       -s INITIAL_MEMORY=256MB \
       -s ALLOW_MEMORY_GROWTH=1 \
@@ -112,7 +112,7 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 else ()
     message(STATUS "Compile in RELEASE mode")
     set_target_properties(${PROJECT_NAME} PROPERTIES LINK_FLAGS "\
-      -s EXPORT_NAME='AlvaARWasm' \
+      -s EXPORT_NAME='ArgusARWasm' \
       -s ENVIRONMENT=web,worker \
       -s INITIAL_MEMORY=256MB \
       -s ALLOW_MEMORY_GROWTH=1 \

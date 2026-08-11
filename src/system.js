@@ -42,17 +42,17 @@ class SharedMemory
     }
 }
 
-class AlvaAR
+class ArgusAR
 {
     static async Initialize( width, height, fov = 45 )
     {
         const wasm = {};
 
-        wasm.ready = AlvaARWasm().then( module => wasm.module = module );
+        wasm.ready = ArgusARWasm().then( module => wasm.module = module );
 
         await wasm.ready;
 
-        return new AlvaAR( wasm, width, height, fov );
+        return new ArgusAR( wasm, width, height, fov );
     }
 
     constructor( wasm, width, height, fov )
@@ -236,4 +236,4 @@ class AlvaAR
     }
 }
 
-export { AlvaAR };
+export { ArgusAR };

@@ -1,5 +1,5 @@
 /**
- * SLAM worker: owns the AlvaAR/wasm instance so the main thread never blocks on tracking.
+ * SLAM worker: owns the ArgusAR/wasm instance so the main thread never blocks on tracking.
  *
  * Protocol (main -> worker):
  *   { type: 'init',  width, height }
@@ -12,8 +12,8 @@
  *   { type: 'result', pose: Float32Array|null, dots: [{x,y}]|null, planePose: Float32Array|null, ms }
  */
 
-let AlvaAR = null;
-let alva = null;
+let ArgusAR = null;
+let argus = null;
 let findPlaneRequested = false;
 
 self.onmessage = async ( event ) =>
@@ -25,17 +25,17 @@ self.onmessage = async ( event ) =>
         case 'init':
         case 'reconfigure':
         {
-            if( !AlvaAR )
+            if( !ArgusAR )
             {
                 // dynamic import with version tag so a rebuilt wasm is never
                 // masked by the browser's module cache
-                ( { AlvaAR } = await import( `./alva_ar.js?v=${ msg.v || '0' }` ) );
+                ( { ArgusAR } = await import( `./argus_ar.js?v=${ msg.v || '0' }` ) );
             }
 
             // Re-initialize on resolution change: System.configure() and the shared
             // image memory are sized to one resolution, so a fresh instance is the
             // safe path. Rare event (adaptive steps), ~100-300ms.
-            alva = await AlvaAR.Initialize( msg.width, msg.height );
+            argus = await ArgusAR.Initialize( msg.width, msg.height );
             self.postMessage( { type: 'ready', width: msg.width, height: msg.height } );
             break;
         }
@@ -48,7 +48,7 @@ self.onmessage = async ( event ) =>
 
         case 'frame':
         {
-            if( !alva )
+            if( !argus )
             {
                 break;
             }
@@ -61,7 +61,7 @@ self.onmessage = async ( event ) =>
                 height: msg.height
             };
 
-            const pose = alva.findCameraPose( frame );
+            const pose = argus.findCameraPose( frame );
 
             let planePose = null;
             let dots = null;
@@ -70,7 +70,7 @@ self.onmessage = async ( event ) =>
             {
                 if( findPlaneRequested )
                 {
-                    const p = alva.findPlane();
+                    const p = argus.findPlane();
 
                     if( p )
                     {
@@ -81,7 +81,7 @@ self.onmessage = async ( event ) =>
             }
             else
             {
-                dots = alva.getFramePoints();
+                dots = argus.getFramePoints();
             }
 
             const ms = performance.now() - t0;
@@ -98,9 +98,9 @@ self.onmessage = async ( event ) =>
 
         case 'reset':
         {
-            if( alva )
+            if( argus )
             {
-                alva.reset();
+                argus.reset();
             }
             break;
         }

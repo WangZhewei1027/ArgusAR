@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
     <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
-    <title>AlvaAR Video (Worker)</title>
+    <title>ArgusAR Video (Worker)</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
         * {
@@ -116,7 +116,7 @@
         let procWidth = media.width;
         let procHeight = media.height;
 
-        const worker = new Worker( './assets/alva_worker.js', { type: 'module' } );
+        const worker = new Worker( './assets/argus_worker.js', { type: 'module' } );
 
         let workerReady = false;
         let workerBusy = false;

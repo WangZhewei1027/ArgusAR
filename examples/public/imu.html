@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
     <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
-    <title>AlvaAR IMU</title>
+    <title>ArgusAR IMU</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
         * {
@@ -145,7 +145,7 @@
 </div>
 <script type="module">
     import { Stats } from "./assets/stats.js";
-    import { AlvaAR } from './assets/alva_ar.js';
+    import { ArgusAR } from './assets/argus_ar.js';
     import { ARCamIMUView } from "./assets/view.js";
     import { IMU } from "./assets/imu.js";
     import { Camera, onFrame, resize2cover } from "./assets/utils.js";
@@ -184,7 +184,7 @@
             $video.style.height = size.height + 'px';
 
             const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
-            const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
+            const argus = await ArgusAR.Initialize( $canvas.width, $canvas.height );
             const view = new ARCamIMUView( $view, $canvas.width, $canvas.height );
 
             Stats.add( 'total' );
@@ -196,7 +196,7 @@
 
             document.body.appendChild( Stats.el );
             document.body.addEventListener( "click", ( e ) => view.addObjectAt( e.clientX, e.clientY ), false );
-            document.body.addEventListener( "dblclick", ( e ) => alva.reset(), false );
+            document.body.addEventListener( "dblclick", ( e ) => argus.reset(), false );
 
             onFrame( () =>
             {
@@ -213,7 +213,7 @@
                     Stats.stop( 'video' );
 
                     Stats.start( 'slam' );
-                    const pose = alva.findCameraPoseWithIMU( frame, imu.orientation, imu.motion );
+                    const pose = argus.findCameraPoseWithIMU( frame, imu.orientation, imu.motion );
                     Stats.stop( 'slam' );
 
                     if( pose )
@@ -224,7 +224,7 @@
                     {
                         view.lostCamera();
 
-                        const dots = alva.getFramePoints();
+                        const dots = argus.getFramePoints();
 
                         for( const p of dots )
                         {

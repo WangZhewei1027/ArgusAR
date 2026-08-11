@@ -4,7 +4,7 @@
     <meta charset="utf-8"/>
     <meta content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no,shrink-to-fit=no" name="viewport"/>
     <meta content="IE=edge" http-equiv="X-UA-Compatible"/>
-    <title>AlvaAR IMU/Pose Emitter</title>
+    <title>ArgusAR IMU/Pose Emitter</title>
     <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
     <style>
         * {
@@ -146,7 +146,7 @@
 </div>
 <script type="module">
     import { io } from "https://cdn.socket.io/4.4.1/socket.io.esm.min.js";
-    import { AlvaAR } from '../assets/alva_ar.js';
+    import { ArgusAR } from '../assets/argus_ar.js';
     import { ARCamView } from "../assets/view.js";
     import { Camera, onFrame, resize2cover } from "../assets/utils.js";
 
@@ -298,13 +298,13 @@
             $video.style.height = size.height + 'px';
 
             const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
-            const alva = await AlvaAR.Initialize( $canvas.width, $canvas.height );
+            const argus = await ArgusAR.Initialize( $canvas.width, $canvas.height );
             const view = new ARCamView( $view, $canvas.width, $canvas.height );
 
             $container.appendChild( $canvas );
             $container.appendChild( $view );
 
-            document.body.addEventListener( "click", () => alva.reset(), false );
+            document.body.addEventListener( "click", () => argus.reset(), false );
 
             let _graphLinePos = 0;
 
@@ -410,7 +410,7 @@
                     ctx.drawImage( $video, 0, 0, $video.videoWidth, $video.videoHeight, size.x, size.y, size.width, size.height );
                     const frame = ctx.getImageData( 0, 0, $canvas.width, $canvas.height );
 
-                    const pose = alva.findCameraPose( frame );
+                    const pose = argus.findCameraPose( frame );
 
                     if( pose )
                     {
@@ -425,7 +425,7 @@
                     {
                         view.lostCamera();
 
-                        const dots = alva.getFramePoints();
+                        const dots = argus.getFramePoints();
 
                         for( const p of dots )
                         {

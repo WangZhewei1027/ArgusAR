@@ -1,12 +1,12 @@
 import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
 import { OrbitControls } from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/examples/jsm/controls/OrbitControls.js';
-import { AlvaARConnectorTHREE } from './alva_ar_three.js'
+import { ArgusARConnectorTHREE } from './argus_ar_three.js'
 
 class ARCamView
 {
     constructor( container, width, height, x = 0, y = 0, z = -10, scale = 1.0)
     {
-        this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
+        this.applyPose = ArgusARConnectorTHREE.Initialize( THREE );
 
         this.renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
         this.renderer.setClearColor( 0, 0 );
@@ -57,7 +57,7 @@ class ARCamIMUView
 {
     constructor( container, width, height )
     {
-        this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
+        this.applyPose = ArgusARConnectorTHREE.Initialize( THREE );
 
         this.renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
         this.renderer.setClearColor( 0, 0 );
@@ -152,7 +152,7 @@ class ARSimpleView
 {
     constructor( container, width, height, mapView = null )
     {
-        this.applyPose = AlvaARConnectorTHREE.Initialize( THREE );
+        this.applyPose = ArgusARConnectorTHREE.Initialize( THREE );
 
         this.renderer = new THREE.WebGLRenderer( { antialias: true, alpha: true } );
         this.renderer.setClearColor( 0, 0 );

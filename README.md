@@ -10,8 +10,8 @@ It began as a fork of [AlvaAR](https://github.com/alanross/AlvaAR) by Alan Ross,
 ## Examples
 The examples use [ThreeJS](https://threejs.org/) to apply and render the estimated camera pose to a 3d environment.  
 
-[Video Demo](https://alanross.github.io/AlvaAR/examples/public/video.html): A desktop browser version using a video file as input.  
-[Camera Demo](https://alanross.github.io/AlvaAR/examples/public/camera.html): The mobile version will access the device camera as input.
+[Video Demo](https://wangzhewei1027.github.io/ArgusAR/examples/public/video.html): A desktop browser version using a video file as input.  
+[Camera Demo](https://wangzhewei1027.github.io/ArgusAR/examples/public/camera.html): The mobile version will access the device camera as input.
 
 <img width="75" src="examples/public/assets/qr.png">
 
@@ -29,13 +29,13 @@ To run the examples on another device in your local network, they must be served
 
 #### 1) Install server dependencies
 ```
-    $: cd ./AlvaAR/examples/
+    $: cd ./ArgusAR/examples/
     $: npm install
 ```
 
 #### 2) Generate self-signed certificate
 ```
-    $: cd ./AlvaAR/examples
+    $: cd ./ArgusAR/examples
     $: mkdir ssl/
     $: cd ssl/
     $: openssl req -nodes -new -x509 -keyout key.pem -out cert.pem
@@ -43,7 +43,7 @@ To run the examples on another device in your local network, they must be served
 
 #### 3) Run
 ```
-    $: cd ./AlvaAR/examples/
+    $: cd ./ArgusAR/examples/
     $: nvm use 13.2
     $: npm start
 ``` 
@@ -55,10 +55,10 @@ Don’t do this unless the site is one you trust or develop.
 
 ## Usage
 
-This code shows how to send image data to AlvaAR to compute the camera pose.
+This code shows how to send image data to ArgusAR to compute the camera pose.
 
 ```javascript
-import { AlvaAR } from 'alva_ar.js';
+import { ArgusAR } from 'argus_ar.js';
 
 const videoOrWebcam = /*...*/;
 
@@ -71,7 +71,7 @@ const ctx = canvas.getContext( '2d' );
 canvas.width = width;
 canvas.height = height;
 
-const alva = await AlvaAR.Initialize( width, height );
+const argus = await ArgusAR.Initialize( width, height );
 
 function loop()
 {
@@ -81,13 +81,13 @@ function loop()
     const frame = ctx.getImageData( 0, 0, width, height );
     
     // cameraPose holds the rotation/translation information where the camera is estimated to be
-    const cameraPose = alva.findCameraPose( frame );
+    const cameraPose = argus.findCameraPose( frame );
     
     // planePose holds the rotation/translation information of a detected plane
-    const planePose = alva.findPlane();
+    const planePose = argus.findPlane();
     
     // The tracked points in the frame
-    const points = alva.getFramePoints();
+    const points = argus.getFramePoints();
 
     for( const p of points )
     {
@@ -127,7 +127,7 @@ Alva makes use of C++11 features and should thus be compiled with a C++11 or hig
 For convenience, a copy of all required libraries has been included in the libs/ folder. Run the following script to compile all libraries to wasm modules which can be linked into the main project.
 
 ```
-    $: cd ./AlvaAR/src/libs/
+    $: cd ./ArgusAR/src/libs/
     $: ./build.sh
 ```
 
@@ -142,7 +142,7 @@ Run the following in your shell before invoking emcmake or emmake:
 Then, run the following:
 
 ```
-    $: cd ./AlvaAR/src/slam
+    $: cd ./ArgusAR/src/slam
     $: mkdir build/
     $: cd build/
     $: emcmake cmake .. 
@@ -158,12 +158,12 @@ Then, run the following:
 
 ## License
 
-AlvaAR is released under the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.txt).  
+ArgusAR is released under the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.txt).  
 
 OV²SLAM and ORB-SLAM2 are both released under the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.txt). Please see 3rd party dependency licenses in libs/.
 
 
-## Contact
+## Credits
 
-Alan Ross: [@alan_ross](https://twitter.com/alan_ross) or [me@aross.io]()  
-Project: [https://github.com/alanross/AlvaAR](https://github.com/alanross/AlvaAR)
+Original author of AlvaAR, which this project is based on: Alan Ross ([@alan_ross](https://twitter.com/alan_ross), [alanross/AlvaAR](https://github.com/alanross/AlvaAR))  
+Built on [OV²SLAM](https://github.com/ov2slam/ov2slam) and [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2).

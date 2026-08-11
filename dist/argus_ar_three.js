@@ -1,11 +1,11 @@
 /**
  * Example usage:
  *      import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
- *      import { AlvaAR } from 'alva_ar.js';
- *      import { AlvaAR } from 'alva_ar_three.js';
+ *      import { ArgusAR } from 'argus_ar.js';
+ *      import { ArgusAR } from 'argus_ar_three.js';
  *
- *      const alva = await AlvaAR.Initialize( ... );
- *      const applyPose = AlvaARConnectorTHREE.Initialize( THREE )
+ *      const argus = await ArgusAR.Initialize( ... );
+ *      const applyPose = ArgusARConnectorTHREE.Initialize( THREE )
  *      const renderer = new THREE.WebGLRenderer( ... );
  *      const camera = new THREE.PerspectiveCamera( ... );
  *      const scene = new THREE.Scene();
@@ -14,7 +14,7 @@
  *      function loop()
  *      {
  *          const imageData = ctx.getImageData( ... );
- *          const pose = alva.findCameraPose( imageData );
+ *          const pose = argus.findCameraPose( imageData );
  *
  *          if( pose ) applyPose( pose, camera.quaternion, camera.position );
  *
@@ -22,7 +22,7 @@
  *      }
  */
 
-class AlvaARConnectorTHREE
+class ArgusARConnectorTHREE
 {
     static Initialize( THREE )
     {
@@ -38,4 +38,4 @@ class AlvaARConnectorTHREE
     }
 }
 
-export { AlvaARConnectorTHREE };
+export { ArgusARConnectorTHREE };

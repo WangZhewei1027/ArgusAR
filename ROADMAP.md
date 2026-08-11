@@ -1,6 +1,6 @@
-# AlvaAR 改造升级 Roadmap
+# ArgusAR 改造升级 Roadmap
 
-> 目标：把 AlvaAR 升级为一个**生产可用的浏览器端 AR 引擎**——稳健的 SLAM、多平面识别、
+> 目标：把它升级为一个**生产可用的浏览器端 AR 引擎**——稳健的 SLAM、多平面识别、
 > **真实米制尺度**（放一个 1m 的立方体，现实中看起来就是 1m），并用 WASM(SIMD/多线程) + GPU(WebGPU/WebGL2) 榨干浏览器性能。
 >
 > 基线状态（已完成）：原版构建链已在本机跑通（emsdk 3.1.40），video/camera demo 验证可用。
@@ -165,4 +165,4 @@ flowchart LR
 
 - 紧耦合 VIO 完整重写（VINS 级后端）——收益/成本比低于松耦合+深度网络组合
 - 稠密重建 / mesh 化 / 遮挡（occlusion）——属下一期
-- WebXR API 桥接——AlvaAR 的价值恰在 WebXR 不可用的场景（iOS Safari）；仅在 README 说明何时应直接用 WebXR
+- WebXR API 桥接——ArgusAR 的价值恰在 WebXR 不可用的场景（iOS Safari）；仅在 README 说明何时应直接用 WebXR
