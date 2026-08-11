@@ -1,6 +1,8 @@
-# AlvaAR
+# ArgusAR
 
-AlvaAR is a realtime visual SLAM algorithm running as WebAssembly, in the browser. It is a heavily modified version of the [OV²SLAM](https://github.com/ov2slam/ov2slam) and [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2) projects. SLAM is the core building block of Augmented Reality applications focusing on world tracking.
+ArgusAR is a realtime visual SLAM engine for the open web — WebAssembly-powered world tracking, plane detection, and (in progress) metric scale estimation, targeting the browsers where native AR (ARKit/ARCore/WebXR) isn't available, such as iOS Safari and in-app webviews.
+
+It began as a fork of [AlvaAR](https://github.com/alanross/AlvaAR) by Alan Ross, which is itself a heavily modified version of the [OV²SLAM](https://github.com/ov2slam/ov2slam) and [ORB-SLAM2](https://github.com/raulmur/ORB_SLAM2) projects. All of them are GPLv3, and so is this project. See [ROADMAP.md](ROADMAP.md) for the upgrade plan and current status.
 
 ![image](examples/public/assets/image.gif)
 

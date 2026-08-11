@@ -1,4 +1,6 @@
-# AlvaAR 升级项目 — 构建与协作指南
+# ArgusAR（原 AlvaAR 升级项目）— 构建与协作指南
+
+仓库：https://github.com/WangZhewei1027/ArgusAR （独立仓库，upstream=alanross/AlvaAR 仅作参照）。Demo 部署在 https://wangzhewei1027.github.io/ArgusAR/ 。
 
 浏览器端 wasm 视觉 SLAM（OV²SLAM/ORB-SLAM2 血统，GPLv3）。改造总计划见 `ROADMAP.md`（6 阶段：SIMD 地基 → 平面系统 → SLAM 稳健性 → 米制尺度 → GPU 前端 → 多线程发布）。
 
