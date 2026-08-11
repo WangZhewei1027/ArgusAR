@@ -146,7 +146,7 @@
 <script type="module">
     import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
     import { Stats } from "./assets/stats.js";
-    import { ArgusAR } from './assets/argus_ar.js?v=b6';
+    import { ArgusAR } from './assets/argus_ar.js?v=b7';
     import { ArgusARConnectorTHREE } from './assets/argus_ar_three.js';
     import { ARCamView } from "./assets/view.js";
     import { Camera, onFrame, resize2cover } from "./assets/utils.js";
@@ -227,10 +227,45 @@
             $video.style.height = size.height + 'px';
 
             const ctx = $canvas.getContext( '2d', { alpha: false, desynchronized: true } );
-            const argus = await ArgusAR.Initialize( $canvas.width, $canvas.height );
+            // typical phone rear camera is ~65 deg horizontal (the old 45 deg
+            // guess systematically warps the geometry); override with ?fov=
+            const fov = parseFloat( new URLSearchParams( location.search ).get( 'fov' ) || '65' );
+            const argus = await ArgusAR.Initialize( $canvas.width, $canvas.height, fov );
             const view = new ARCamView( $view, $canvas.width, $canvas.height );
 
             const applyPose = ArgusARConnectorTHREE.Initialize( THREE );
+
+            // One-Euro-style pose filter: heavy smoothing at rest, light
+            // smoothing under fast motion — kills visible pose jitter
+            const targetQ = new THREE.Quaternion();
+            const targetP = new THREE.Vector3();
+            const smoothQ = new THREE.Quaternion();
+            const smoothP = new THREE.Vector3();
+            let filterInit = false;
+
+            function smoothedCameraPose( pose )
+            {
+                applyPose( pose, targetQ, targetP );
+
+                if( !filterInit )
+                {
+                    smoothQ.copy( targetQ );
+                    smoothP.copy( targetP );
+                    filterInit = true;
+                }
+                else
+                {
+                    const speed = smoothP.distanceTo( targetP );
+                    const aPos = Math.min( 1, 0.25 + speed * 6 );
+                    const aRot = Math.min( 1, 0.3 + 8 * Math.abs( 1 - smoothQ.dot( targetQ ) ) * 20 );
+                    smoothP.lerp( targetP, aPos );
+                    smoothQ.slerp( targetQ, aRot );
+                }
+
+                view.camera.position.copy( smoothP );
+                view.camera.quaternion.copy( smoothQ );
+                view.object.visible = true;
+            }
 
             Stats.add( 'total' );
             Stats.add( 'video' );
@@ -254,6 +289,7 @@
             {
                 e.stopPropagation();
                 argus.reset();
+                filterInit = false;
                 view.scene.children.filter( o => o.placed || o.planeViz ).forEach( o => view.scene.remove( o ) );
             } );
             document.body.appendChild( $reset );
@@ -332,7 +368,7 @@
 
                     if( pose )
                     {
-                        view.updateCameraPose( pose );
+                        smoothedCameraPose( pose );
 
                         if( ++frameCount % 10 === 0 )
                         {

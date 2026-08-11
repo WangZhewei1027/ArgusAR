@@ -120,15 +120,20 @@ int System::findCameraPoseWithIMU(int imageRGBADataPtr, int imuDataPtr, int pose
 
 int System::findCameraPose(int imageRGBADataPtr, int posePtr)
 {
+    const double timestamp = (double) duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+    return findCameraPoseAt(imageRGBADataPtr, posePtr, timestamp);
+}
+
+int System::findCameraPoseAt(int imageRGBADataPtr, int posePtr, double timestampMs)
+{
     auto *imageData = reinterpret_cast<uint8_t *>(imageRGBADataPtr);
     auto *poseData = reinterpret_cast<float *>(posePtr);
 
     cv::Mat image = cv::Mat(state_->imgHeight_, state_->imgWidth_, CV_8UC4, imageData);
     cv::cvtColor(image, image, cv::COLOR_RGBA2GRAY);
 
-    uint64_t timestamp = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-
-    int status = processCameraPose(image, timestamp);
+    int status = processCameraPose(image, (uint64_t) timestampMs);
 
     Utils::toPoseArray(currFrame_->getTwc(), poseData);
 

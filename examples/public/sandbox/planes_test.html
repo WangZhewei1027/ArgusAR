@@ -22,7 +22,7 @@
     // manually-rendered three.js pass with pixel-level polygon counting
     // (no rAF anywhere — works in hidden panes).
 
-    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b6';
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b7';
     const { ArgusAR } = await import( `../assets/argus_ar.js?v=${ wasmVersion }` );
 
     const PALETTE = [ 0x4dabf7, 0x51cf66, 0xffd43b, 0xff6b6b, 0xb197fc, 0xf783ac, 0x63e6be, 0xffa94d ];
@@ -120,7 +120,8 @@
         media = await Video.Initialize( `../assets/${ videoFile }?v=${ wasmVersion }` );
     }
 
-    const argus = await ArgusAR.Initialize( media.width, media.height );
+    const fov = parseFloat( params.get( 'fov' ) || '45' );
+    const argus = await ArgusAR.Initialize( media.width, media.height, fov );
 
     if( new URLSearchParams( location.search ).get( 'debug' ) )
     {
@@ -165,6 +166,9 @@
     const lostKpCounts = [];
     let tracked = 0;
     let frames = 0;
+    let firstPose = null;
+    let lastPose = null;
+    let maxDistFromStart = 0;
 
     // pingpong mode: play forward then backward — an exact revisit of every
     // viewpoint, the deterministic acceptance test for loop closing
@@ -186,12 +190,17 @@
         }
 
         const frame = media.getImageData();
-        const pose = argus.findCameraPose( frame );
+        const pose = argus.findCameraPose( frame, fi * ( 1000 / 30 ) ); // synthetic clock: reproducible motion priors
 
         if( pose )
         {
             tracked++;
             applyPose( pose, camera3.quaternion, camera3.position );
+
+            if( !firstPose ) firstPose = [ pose[12], pose[13], pose[14] ];
+            lastPose = [ pose[12], pose[13], pose[14] ];
+            const dx = lastPose[0] - firstPose[0], dy = lastPose[1] - firstPose[1], dz = lastPose[2] - firstPose[2];
+            maxDistFromStart = Math.max( maxDistFromStart, Math.hypot( dx, dy, dz ) );
         }
         else
         {
@@ -263,6 +272,11 @@
 
     const result = {
         video: framesDir || videoFile,
+        fov: fov,
+        // pingpong: end pose should equal start pose; normalized by max excursion
+        returnDrift: ( firstPose && lastPose && maxDistFromStart > 0 )
+                     ? +( Math.hypot( lastPose[0] - firstPose[0], lastPose[1] - firstPose[1], lastPose[2] - firstPose[2] ) / maxDistFromStart ).toFixed( 4 )
+                     : null,
         frames: frames,
         trackedRatio: +( tracked / frames ).toFixed( 3 ),
         loopStats: argus.getLoopStats(),

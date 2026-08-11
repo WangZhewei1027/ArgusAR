@@ -35,6 +35,11 @@ public:
 
     int findCameraPose(int imageRGBADataPtr, int posePtr);
 
+    // like findCameraPose but with a caller-supplied timestamp (ms) — makes
+    // benchmark runs reproducible (the wall clock varies run-to-run under
+    // throttled/hidden-pane frame pacing, changing motion-model priors)
+    int findCameraPoseAt(int imageRGBADataPtr, int posePtr, double timestampMs);
+
     int findPlane(int locationPtr, int numIterations);
 
     // Multi-plane detection: updates the persistent PlaneManager from current

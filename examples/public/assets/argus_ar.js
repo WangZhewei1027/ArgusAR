@@ -207,11 +207,13 @@ class ArgusAR
         return null;
     }
 
-    findCameraPose( frame )
+    findCameraPose( frame, timestampMs )
     {
         this.memImg.write( frame.data );
 
-        const status = this.system.findCameraPose( this.memImg.heap.byteOffset, this.memCam.ptr );
+        const status = ( typeof timestampMs === 'number' )
+                       ? this.system.findCameraPoseAt( this.memImg.heap.byteOffset, this.memCam.ptr, timestampMs )
+                       : this.system.findCameraPose( this.memImg.heap.byteOffset, this.memCam.ptr );
 
         if( status === 1 )
         {

@@ -86,7 +86,7 @@
     import { Stats } from "./assets/stats.js";
     import { ARSimpleView, ARSimpleMap } from "./assets/view.js";
 
-    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b6';
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b7';
     const { ArgusAR } = await import( `./assets/argus_ar.js?v=${ wasmVersion }` );
     import { Video, onFrame } from "./assets/utils.js";
     import { ArgusARConnectorTHREE } from './assets/argus_ar_three.js';
