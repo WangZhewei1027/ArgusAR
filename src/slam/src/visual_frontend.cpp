@@ -62,7 +62,61 @@ bool VisualFrontend::process(cv::Mat &image, double timestamp)
         if (checkReadyForInit())
         {
             state_->slamReadyForInit_ = true;
+            initRefreshCounter_ = 0;
             return true;
+        }
+
+        // Refresh the init reference keyframe ONLY when it has gone stale,
+        // i.e. the shared-feature count with the reference collapsed (typical
+        // under forward motion, where old features leave the view and the
+        // gate can never be satisfied against the stranded reference). A
+        // healthy reference must never be refreshed: that would keep cutting
+        // the baseline before enough parallax accumulates.
+        initRefreshCounter_++;
+
+        auto refIt = mapManager_->mapKeyframes_.find(currFrame_->keyframeId_);
+
+        if (refIt != mapManager_->mapKeyframes_.end() && refIt->second != nullptr && initRefreshCounter_ >= 12)
+        {
+            int commonWithRef = 0;
+
+            for (const auto &it : currFrame_->mapKeypoints_)
+            {
+                const auto kfKp = refIt->second->getKeypointById(it.second.keypointId_);
+
+                if (kfKp.keypointId_ == it.second.keypointId_)
+                {
+                    commonWithRef++;
+                }
+            }
+
+            if (commonWithRef < 40)
+            {
+                // last-chance attempt on this baseline before discarding it:
+                // under forward motion the parallax never reaches the strict
+                // gate, but right before the shared features run out it is at
+                // its maximum for this reference — try once with a lower bar
+                const float savedGate = state_->minAvgRotationParallax_;
+                state_->minAvgRotationParallax_ = 12.0f;
+                const bool lastChance = checkReadyForInit();
+                state_->minAvgRotationParallax_ = savedGate;
+
+                if (lastChance)
+                {
+                    state_->slamReadyForInit_ = true;
+                    initRefreshCounter_ = 0;
+                    return true;
+                }
+
+                initRefreshCounter_ = 0;
+
+                if (state_->debug_)
+                {
+                    std::cout << "- [Visual-Frontend]: Init reference stale (" << commonWithRef << " shared), refreshing" << std::endl;
+                }
+
+                return true; // triggers keyframe creation (no mapping pre-init)
+            }
         }
 
         if (state_->debug_)

@@ -321,6 +321,24 @@ class ArgusAR
         return this.system.getLoopClosureCount();
     }
 
+    /** Loop-closing telemetry for tuning: where the pipeline stops. */
+    getLoopStats()
+    {
+        const STATUS = [ 'DETECTED', 'NOT_DETECTED', 'NOT_ENOUGH_IMAGES', 'NOT_ENOUGH_ISLANDS', 'NOT_ENOUGH_INLIERS', 'TRANSITION' ];
+
+        this.system.getLoopStats( this.memHit.ptr );
+        const d = this.memHit.read( 6 );
+
+        return {
+            keyframes: d[0],
+            skippedFewDescs: d[1],
+            lastStatus: STATUS[d[2]] || 'NONE',
+            candidates: d[3],
+            verifyRejects: d[4],
+            loops: d[5]
+        };
+    }
+
     getFramePoints()
     {
         const numPoints = this.system.getFramePoints( this.memPts.ptr );

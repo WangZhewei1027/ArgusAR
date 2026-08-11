@@ -67,7 +67,10 @@ public:
     float mapMaxReprojectionError_ = 3.0;
     float mapKeyframeFilteringRatio_ = 0.95;
 
-    bool multiViewRandomEnabled_ = true;
+    // false = fixed RANSAC seed in OpenGV (time(0)-seeded otherwise), making
+    // runs reproducible; borderline initializations then fail or succeed
+    // deterministically instead of flickering between runs
+    bool multiViewRandomEnabled_ = false;
     float multiViewRansacError_ = 3.0;
     int multiViewRansacNumIterations_ = 100;
 

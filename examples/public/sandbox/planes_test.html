@@ -22,7 +22,7 @@
     // manually-rendered three.js pass with pixel-level polygon counting
     // (no rAF anywhere — works in hidden panes).
 
-    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b4';
+    const wasmVersion = new URLSearchParams( location.search ).get( 'v' ) || 'b5';
     const { ArgusAR } = await import( `../assets/argus_ar.js?v=${ wasmVersion }` );
 
     const PALETTE = [ 0x4dabf7, 0x51cf66, 0xffd43b, 0xff6b6b, 0xb197fc, 0xf783ac, 0x63e6be, 0xffa94d ];
@@ -59,8 +59,73 @@
 
     const $out = document.getElementById( 'out' );
 
-    const media = await Video.Initialize( '../assets/video.mp4' );
+    const params = new URLSearchParams( location.search );
+    const videoFile = params.get( 'video' ) || 'video.mp4';
+
+    // frame-sequence mode: ?frames=<dir>&count=N loads pre-extracted JPEGs
+    // instead of seeking a <video> — hidden panes throttle video decoding for
+    // some files, silently freezing seek-driven playback
+    const framesDir = params.get( 'frames' );
+    const framesCount = parseInt( params.get( 'count' ) || '0', 10 );
+
+    let media;
+
+    if( framesDir )
+    {
+        // NOTE: hidden panes defer Image.decode(), throttle img.onload AND
+        // pace sequential background fetches — so prefetch ALL frames up
+        // front with high concurrency, then decode locally per frame
+        $out.textContent = 'prefetching frames…';
+
+        const blobs = new Array( framesCount );
+
+        const CONC = 32;
+
+        for( let base = 0; base < framesCount; base += CONC )
+        {
+            await Promise.all( Array.from( { length: Math.min( CONC, framesCount - base ) }, ( _, k ) =>
+                fetch( `../assets/${ framesDir }/f_${ String( base + k + 1 ).padStart( 4, '0' ) }.jpg` )
+                    .then( r => r.blob() )
+                    .then( b => blobs[base + k] = b ) ) );
+        }
+
+        const loadImage = ( i ) => createImageBitmap( blobs[i] );
+
+        const first = await loadImage( 0 );
+
+        const fCanvas = document.createElement( 'canvas' );
+        fCanvas.width = first.width;
+        fCanvas.height = first.height;
+        const fCtx = fCanvas.getContext( '2d', { willReadFrequently: true } );
+
+        media = {
+            width: first.width,
+            height: first.height,
+            el: { duration: framesCount / 30, pause() {}, set loop( v ) {}, set onseeked( f ) {} },
+            async seekFrame( i )
+            {
+                const bmp = await loadImage( i );
+                fCtx.drawImage( bmp, 0, 0 );
+                bmp.close();
+            },
+            getImageData()
+            {
+                return fCtx.getImageData( 0, 0, fCanvas.width, fCanvas.height );
+            }
+        };
+    }
+    else
+    {
+        // version tag on the video too — same-URL content swaps otherwise serve stale cache
+        media = await Video.Initialize( `../assets/${ videoFile }?v=${ wasmVersion }` );
+    }
+
     const argus = await ArgusAR.Initialize( media.width, media.height );
+
+    if( new URLSearchParams( location.search ).get( 'debug' ) )
+    {
+        argus.system.setDebug( true );
+    }
 
     media.el.pause();
     media.el.loop = false;
@@ -97,12 +162,22 @@
 
     const fps = 30;
     const timeline = [];
+    const lostKpCounts = [];
     let tracked = 0;
     let frames = 0;
 
-    for( let t = 0.001; t < media.el.duration; t += 1 / fps )
+    const totalFrames = framesDir ? framesCount : Math.floor( media.el.duration * fps );
+
+    for( let fi = 0; fi < totalFrames; fi++ )
     {
-        await seekTo( t );
+        if( framesDir )
+        {
+            await media.seekFrame( fi );
+        }
+        else
+        {
+            await seekTo( 0.001 + fi / fps );
+        }
 
         const frame = media.getImageData();
         const pose = argus.findCameraPose( frame );
@@ -111,6 +186,10 @@
         {
             tracked++;
             applyPose( pose, camera3.quaternion, camera3.position );
+        }
+        else
+        {
+            lostKpCounts.push( argus.getFramePoints().length );
         }
 
         frames++;
@@ -177,8 +256,11 @@
     }
 
     const result = {
+        video: framesDir || videoFile,
         frames: frames,
         trackedRatio: +( tracked / frames ).toFixed( 3 ),
+        loopStats: argus.getLoopStats(),
+        meanKeypointsWhileLost: lostKpCounts.length ? +( lostKpCounts.reduce( ( a, b ) => a + b, 0 ) / lostKpCounts.length ).toFixed( 1 ) : null,
         renderedPlanePixelRatio: +coloredRatio.toFixed( 4 ),
         finalPlanes: finalPlanes.map( p => ( {
             id: p.id, type: p.type, inliers: p.inliers,

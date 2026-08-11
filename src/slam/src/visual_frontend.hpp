@@ -117,4 +117,7 @@ private:
 
     bool p3pReq_ = false;
     int poseFailedCounter_ = 0;
+
+    // frames since the last init-reference keyframe (pre-initialization)
+    int initRefreshCounter_ = 0;
 };

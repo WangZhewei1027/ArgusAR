@@ -36,6 +36,13 @@ public:
 
     int numLoopClosures_ = 0;
 
+    // telemetry for tuning on real devices
+    int numKeyframesFed_ = 0;
+    int numSkippedFewDescs_ = 0;
+    int numCandidates_ = 0;
+    int numVerifyRejects_ = 0;
+    int lastStatus_ = -1;   // ibow_lcd::LCDetectorStatus of the last process()
+
 private:
     bool verifyAndClose(int curKfId, int trainKfId, const std::vector<int> &queryKpIndices, const std::vector<int> &trainKpIndices);
 

@@ -19,3 +19,5 @@ cmake-build-debug/*
 
 # mixed libs variant (symlinks into build/ and build_simd/), recreate per CLAUDE.md
 src/libs/build_mix/
+tour_frames/
+# regenerate test frames: ffmpeg -i examples/public/assets/tour.mp4 -q:v 5 examples/public/assets/tour_frames/f_%04d.jpg

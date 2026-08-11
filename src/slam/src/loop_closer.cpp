@@ -105,6 +105,7 @@ bool LoopCloser::onNewKeyframe(int keyframeId)
 
     if ((int) cvKps.size() < 20)
     {
+        numSkippedFewDescs_++;
         return false;
     }
 
@@ -112,13 +113,19 @@ bool LoopCloser::onNewKeyframe(int keyframeId)
     imageToKeyframe_[imageId] = keyframeId;
     imageKeypointIds_[imageId] = kpIds;
 
+    numKeyframesFed_++;
+
     ibow_lcd::LCDetectorResult result;
     detector_->process(imageId, cvKps, descs, &result);
+
+    lastStatus_ = (int) result.status;
 
     if (!result.isLoop())
     {
         return false;
     }
+
+    numCandidates_++;
 
     const auto trainIt = imageToKeyframe_.find(result.train_id);
 
@@ -194,6 +201,8 @@ bool LoopCloser::verifyAndClose(int curKfId, int trainKfId, const std::vector<in
 
     if ((int) bvs.size() < 12)
     {
+        numVerifyRejects_++;
+
         if (state_->debug_)
         {
             std::cout << "- [LoopCloser]: too few 2D-3D pairs (" << bvs.size() << "), reject" << std::endl;
@@ -220,6 +229,8 @@ bool LoopCloser::verifyAndClose(int curKfId, int trainKfId, const std::vector<in
 
     if (!ok || numInliers < 10)
     {
+        numVerifyRejects_++;
+
         if (state_->debug_)
         {
             std::cout << "- [LoopCloser]: P3P verification failed (" << numInliers << " inliers), reject" << std::endl;

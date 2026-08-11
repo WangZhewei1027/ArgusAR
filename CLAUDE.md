@@ -45,3 +45,10 @@ emcmake cmake .. && emmake make install -j6   # → dist/argus_ar.{js,wasm} + ex
 - 平面检测（Phase 2 已完成）：`plane_detector.hpp/cpp` 的 PlaneManager——顺序 RANSAC 多平面、ID 持久化+EMA 平滑+淘汰、凸包边界；System::getPlanes/hitTest 序列化到共享内存，JS 端 `getPlanes()/hitTest()/createAnchor()`。旧的 `processPlane`/`findPlane` 保留兼容。管线回归测试页：`examples/public/sandbox/planes_test.html?v=N`（seek 驱动，不依赖页面可见性；注意隐藏页面里 video.play() 会被浏览器节能暂停，rAF 也会挂起——验证一律用 seek 驱动页）。平面分类（horizontal/vertical）相对初始相机系，Phase 4 接入重力后才是真实方向。
 - IMU（现状为空壳，数据被丢弃）：`system.cpp` 的 `findCameraPoseWithIMU`
 - 回环检测库已编译未接入：`src/libs/ibow_lcd`、`obindex2`
+
+## 测试素材与验证陷阱（2026-08-11 补）
+
+- 测试视频：`assets/video.mp4`（桌面横扫，基线 tracked 0.993）+ `assets/tour.mp4`（看房前进式漫游，Pexels id 7578552 by Kindel Media，已重编码全内帧，tracked 0.779）。
+- **隐藏浏览器面板会冻结/节流一切媒体解码**：video seek 返回旧帧（静默!）、Image.decode() 永不返回、img.onload 被限到 ~1/s、后台顺序 fetch 也被限速。唯一可靠通路：**并发预取 blob + createImageBitmap**。回归一律用 `planes_test.html?frames=<dir>&count=N`（帧序列模式）；帧目录用 ffmpeg 从 mp4 现场生成（gitignored）：`ffmpeg -i assets/xxx.mp4 -vf fps=30 -q:v 5 assets/xxx_frames/f_%04d.jpg`。
+- 回环遥测：`getLoopStats()` → {keyframes, candidates, verifyRejects, loops, lastStatus}；camera HUD 实时显示。`setDebug(true)` 开 C++ 逐帧日志。
+- OpenGV RANSAC 已固定种子（state.multiViewRandomEnabled_=false），全管线确定性。

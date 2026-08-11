@@ -17,6 +17,8 @@ EMSCRIPTEN_BINDINGS(Module)
         .function("findPlane", &System::findPlane)
         .function("getPlanes", &System::getPlanes)
         .function("getLoopClosureCount", &System::getLoopClosureCount)
+        .function("getLoopStats", &System::getLoopStats)
+        .function("setDebug", &System::setDebug)
         .function("hitTest", &System::hitTest)
         .function("getFramePoints", &System::getFramePoints);
 }

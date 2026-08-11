@@ -53,6 +53,12 @@ public:
     // number of successfully closed loops since start/reset
     int getLoopClosureCount();
 
+    void setDebug(bool enabled);
+
+    // loop-closing telemetry: writes [kfFed, skippedFewDescs, lastStatus,
+    // candidates, verifyRejects, loops] as floats; returns 6
+    int getLoopStats(int statsPtr);
+
 private:
     cv::Mat processPlane(std::vector<Eigen::Vector3d> mapPoints, Sophus::SE3d Twc, int numIterations = 50);
 

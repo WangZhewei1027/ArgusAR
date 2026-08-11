@@ -171,9 +171,31 @@ int System::getFramePoints(int pointsPtr)
     return n;
 }
 
+void System::setDebug(bool enabled)
+{
+    if (state_)
+    {
+        state_->debug_ = enabled;
+    }
+}
+
 int System::getLoopClosureCount()
 {
     return loopCloser_ ? loopCloser_->numLoopClosures_ : 0;
+}
+
+int System::getLoopStats(int statsPtr)
+{
+    auto *data = reinterpret_cast<float *>(statsPtr);
+
+    data[0] = loopCloser_ ? (float) loopCloser_->numKeyframesFed_ : 0;
+    data[1] = loopCloser_ ? (float) loopCloser_->numSkippedFewDescs_ : 0;
+    data[2] = loopCloser_ ? (float) loopCloser_->lastStatus_ : -1;
+    data[3] = loopCloser_ ? (float) loopCloser_->numCandidates_ : 0;
+    data[4] = loopCloser_ ? (float) loopCloser_->numVerifyRejects_ : 0;
+    data[5] = loopCloser_ ? (float) loopCloser_->numLoopClosures_ : 0;
+
+    return 6;
 }
 
 static void writePlanePose(const DetectedPlane &plane, const Eigen::Vector3d &position, float *out)
