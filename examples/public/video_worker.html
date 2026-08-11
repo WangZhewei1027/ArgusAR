@@ -185,7 +185,7 @@
             }
         };
 
-        worker.postMessage( { type: 'init', width: procWidth, height: procHeight, v: new URLSearchParams( location.search ).get( 'v' ) || 'b5' } );
+        worker.postMessage( { type: 'init', width: procWidth, height: procHeight, v: new URLSearchParams( location.search ).get( 'v' ) || 'b6' } );
 
         $cam.addEventListener( 'click', () => worker.postMessage( { type: 'findPlane' } ) );
         $cam.parentElement.style.display = 'block';

@@ -153,55 +153,72 @@ bool LoopCloser::verifyAndClose(int curKfId, int trainKfId, const std::vector<in
         return false;
     }
 
-    // indices in the result refer to positions in the kps vectors we passed
-    // to process(); resolve them through the stored per-image id lists.
-    // (linear scan for the image ids is fine at keyframe rate)
-    unsigned curImageId = 0, trainImageId = 0;
+    // The detector's own match set is too sparse once filtered down to 3D
+    // map points. Match ALL current-keyframe descriptors against ALL of the
+    // train keyframe's landmarks that are still 3D in the live map
+    // (ORB-SLAM-style loop verification).
+    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> trainPts;
+    cv::Mat trainDescs;
 
-    for (const auto &pair : imageToKeyframe_)
+    for (const auto &kp : trainIt->second->getKeypoints())
     {
-        if (pair.second == curKfId) curImageId = pair.first;
-        if (pair.second == trainKfId) trainImageId = pair.first;
-    }
-
-    const auto &curIds = imageKeypointIds_.at(curImageId);
-    const auto &trainIds = imageKeypointIds_.at(trainImageId);
-
-    // gather 2D-3D correspondences: current keyframe bearing vectors vs the
-    // 3D map points seen in the old keyframe
-    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> bvs, wpts;
-
-    for (size_t m = 0; m < queryKpIndices.size() && m < trainKpIndices.size(); m++)
-    {
-        const int qi = queryKpIndices[m];
-        const int ti = trainKpIndices[m];
-
-        if (qi < 0 || ti < 0 || qi >= (int) curIds.size() || ti >= (int) trainIds.size())
+        if (kp.desc_.empty())
         {
             continue;
         }
 
-        const auto mpIt = mapManager_->mapMapPoints_.find(trainIds[ti]);
+        const auto mpIt = mapManager_->mapMapPoints_.find(kp.keypointId_);
 
         if (mpIt == mapManager_->mapMapPoints_.end() || mpIt->second == nullptr || !mpIt->second->is3d_)
         {
             continue;
         }
 
-        const auto kp = curIt->second->getKeypointById(curIds[qi]);
+        trainDescs.push_back(kp.desc_);
+        trainPts.push_back(mpIt->second->getPoint());
+    }
 
-        if (kp.keypointId_ != curIds[qi])
+    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> curBvs;
+    cv::Mat curDescs;
+
+    for (const auto &kp : curIt->second->getKeypoints())
+    {
+        if (kp.desc_.empty())
         {
             continue;
         }
 
-        bvs.push_back(kp.bv_);
-        wpts.push_back(mpIt->second->getPoint());
+        curDescs.push_back(kp.desc_);
+        curBvs.push_back(kp.bv_);
+    }
+
+    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> bvs, wpts;
+
+    if (!trainDescs.empty() && !curDescs.empty())
+    {
+        cv::BFMatcher matcher(cv::NORM_HAMMING);
+        std::vector<std::vector<cv::DMatch>> knn;
+        matcher.knnMatch(curDescs, trainDescs, knn, 2);
+
+        for (const auto &m : knn)
+        {
+            if (m.size() == 2 && m[0].distance < 0.75f * m[1].distance)
+            {
+                bvs.push_back(curBvs[m[0].queryIdx]);
+                wpts.push_back(trainPts[m[0].trainIdx]);
+            }
+            else if (m.size() == 1 && m[0].distance < 40.0f)
+            {
+                bvs.push_back(curBvs[m[0].queryIdx]);
+                wpts.push_back(trainPts[m[0].trainIdx]);
+            }
+        }
     }
 
     if ((int) bvs.size() < 12)
     {
         numVerifyRejects_++;
+        numRejectPairs_++;
 
         if (state_->debug_)
         {
@@ -230,6 +247,7 @@ bool LoopCloser::verifyAndClose(int curKfId, int trainKfId, const std::vector<in
     if (!ok || numInliers < 10)
     {
         numVerifyRejects_++;
+        numRejectP3p_++;
 
         if (state_->debug_)
         {

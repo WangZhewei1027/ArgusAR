@@ -41,6 +41,8 @@ public:
     int numSkippedFewDescs_ = 0;
     int numCandidates_ = 0;
     int numVerifyRejects_ = 0;
+    int numRejectPairs_ = 0;   // too few 2D-3D correspondences
+    int numRejectP3p_ = 0;     // P3P RANSAC inlier count too low
     int lastStatus_ = -1;   // ibow_lcd::LCDetectorStatus of the last process()
 
 private:

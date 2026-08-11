@@ -194,8 +194,10 @@ int System::getLoopStats(int statsPtr)
     data[3] = loopCloser_ ? (float) loopCloser_->numCandidates_ : 0;
     data[4] = loopCloser_ ? (float) loopCloser_->numVerifyRejects_ : 0;
     data[5] = loopCloser_ ? (float) loopCloser_->numLoopClosures_ : 0;
+    data[6] = loopCloser_ ? (float) loopCloser_->numRejectPairs_ : 0;
+    data[7] = loopCloser_ ? (float) loopCloser_->numRejectP3p_ : 0;
 
-    return 6;
+    return 8;
 }
 
 static void writePlanePose(const DetectedPlane &plane, const Eigen::Vector3d &position, float *out)
