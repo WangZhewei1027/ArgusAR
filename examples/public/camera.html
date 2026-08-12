@@ -146,10 +146,11 @@
 <script type="module">
     import * as THREE from 'https://threejsfundamentals.org/threejs/resources/threejs/r132/build/three.module.js';
     import { Stats } from "./assets/stats.js";
-    import { ArgusAR } from './assets/argus_ar.js?v=b7';
+    import { ArgusAR } from './assets/argus_ar.js?v=b8';
     import { ArgusARConnectorTHREE } from './assets/argus_ar_three.js';
     import { ARCamView } from "./assets/view.js";
     import { Camera, onFrame, resize2cover } from "./assets/utils.js";
+    import { IMUScaleEstimator } from './assets/scale_estimator.js';
 
     const PALETTE = [ 0x4dabf7, 0x51cf66, 0xffd43b, 0xff6b6b, 0xb197fc, 0xf783ac, 0x63e6be, 0xffa94d ];
 
@@ -235,6 +236,21 @@
 
             const applyPose = ArgusARConnectorTHREE.Initialize( THREE );
 
+            // metric scale: loosely-coupled IMU/vision alignment (Phase 4 L1)
+            const scaleEstimator = new IMUScaleEstimator();
+            let metersPerUnit = null;
+            let scaleConfidence = 0;
+
+            window.addEventListener( 'devicemotion', ( e ) =>
+            {
+                const a = e.accelerationIncludingGravity;
+
+                if( a && a.x !== null )
+                {
+                    scaleEstimator.feedIMU( performance.now(), a.x, a.y, a.z );
+                }
+            } );
+
             // One-Euro-style pose filter: heavy smoothing at rest, light
             // smoothing under fast motion — kills visible pose jitter
             const targetQ = new THREE.Quaternion();
@@ -289,6 +305,9 @@
             {
                 e.stopPropagation();
                 argus.reset();
+                scaleEstimator.reset();
+                metersPerUnit = null;
+                scaleConfidence = 0;
                 filterInit = false;
                 view.scene.children.filter( o => o.placed || o.planeViz ).forEach( o => view.scene.remove( o ) );
             } );
@@ -315,9 +334,14 @@
                                   : planes.map( p => `#${ p.id } ${ p.type } (${ p.inliers })` ).join( '<br/>' );
 
                 const ls = argus.getLoopStats();
+                const scaleLine = metersPerUnit
+                                  ? `scale: ${ ( metersPerUnit * 100 ).toFixed( 1 ) }cm/u (${ ( scaleConfidence * 100 ) | 0 }%)`
+                                  : 'scale: move the phone…';
+
                 $hud.innerHTML = planeList
                     + `<br/>kf:${ ls.keyframes } cand:${ ls.candidates } rej:${ ls.verifyRejects }`
-                    + `<br/>loops: ${ ls.loops } (${ ls.lastStatus })`;
+                    + `<br/>loops: ${ ls.loops } (${ ls.lastStatus })`
+                    + `<br/>${ scaleLine }`;
             }
 
             // tap to hit-test & place an object on a plane
@@ -327,7 +351,8 @@
 
                 if( hit )
                 {
-                    const s = 0.4;
+                    // 0.15 m cube when the metric scale is known; fallback 0.4 slam units
+                    const s = metersPerUnit ? ( 0.15 / metersPerUnit ) : 0.4;
                     const base = new THREE.Mesh(
                         new THREE.PlaneGeometry( s, s ),
                         new THREE.MeshBasicMaterial( { color: 0xffffff, side: THREE.DoubleSide, transparent: true, opacity: 0.15 } )
@@ -363,8 +388,25 @@
                     Stats.stop( 'video' );
 
                     Stats.start( 'slam' );
-                    const pose = argus.findCameraPose( frame );
+                    const frameTime = performance.now();
+                    const pose = argus.findCameraPose( frame, frameTime );
                     Stats.stop( 'slam' );
+
+                    if( pose )
+                    {
+                        scaleEstimator.feedPose( frameTime, pose );
+
+                        if( frameCount % 30 === 0 )
+                        {
+                            const est = scaleEstimator.estimate();
+
+                            if( est && est.confidence > 0.5 )
+                            {
+                                metersPerUnit = est.metersPerUnit;
+                                scaleConfidence = est.confidence;
+                            }
+                        }
+                    }
 
                     if( pose )
                     {
@@ -400,9 +442,21 @@
         {
             $splash.remove();
 
-            $start.addEventListener( 'click', () =>
+            $start.addEventListener( 'click', async () =>
             {
                 $overlay.remove();
+
+                // iOS requires a user-gesture permission request for motion sensors
+                try
+                {
+                    if( typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function' )
+                    {
+                        await DeviceMotionEvent.requestPermission();
+                    }
+                }
+                catch( e )
+                {
+                }
 
                 Camera.Initialize( config ).then( media => demo( media ) ).catch( error => alert( 'Camera ' + error ) );
 

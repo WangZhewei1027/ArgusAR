@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <title>ArgusAR Scale Estimator Test</title>
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgo=">
+    <style>body { font: 12px monospace; padding: 16px; } #out { white-space: pre-wrap; }</style>
+</head>
+<body>
+<div id="out">running…</div>
+<script type="module">
+    import { IMUScaleEstimator } from '../assets/scale_estimator.js';
+
+    // Synthetic ground-truth validation of the metric scale estimator:
+    // a known trajectory in METERS is fed to the estimator as SLAM units
+    // (divided by kTrue) plus rotated device-frame accelerometer samples
+    // (including a constant gravity term and noise). The estimator must
+    // recover kTrue and the gravity direction.
+
+    // deterministic noise
+    let seed = 1234567;
+    const rand = () => ( seed = ( seed * 1103515245 + 12345 ) & 0x7fffffff ) / 0x7fffffff - 0.5;
+
+    const kTrue = 0.05;                    // meters per slam unit
+    const G = [ 0.4, 9.5, -2.1 ];          // world gravity-ish vector (m/s²), |G|≈9.73
+    const DUR = 8, IMU_HZ = 60, CAM_HZ = 30;
+
+    // trajectory in meters: 3-axis sinusoids (rich excitation)
+    const posM = ( t ) => [
+        0.30 * Math.sin( 2.1 * t ),
+        0.18 * Math.sin( 3.3 * t + 1.0 ),
+        0.25 * Math.sin( 1.7 * t + 2.2 )
+    ];
+    const accM = ( t ) => [
+        -0.30 * 2.1 * 2.1 * Math.sin( 2.1 * t ),
+        -0.18 * 3.3 * 3.3 * Math.sin( 3.3 * t + 1.0 ),
+        -0.25 * 1.7 * 1.7 * Math.sin( 1.7 * t + 2.2 )
+    ];
+
+    // slow camera rotation about a tilted axis
+    const camQuat = ( t ) =>
+    {
+        const ang = 0.3 * Math.sin( 0.7 * t );
+        const ax = [ 0.36, 0.48, 0.8 ];
+        const s = Math.sin( ang / 2 );
+        return [ ax[0] * s, ax[1] * s, ax[2] * s, Math.cos( ang / 2 ) ];
+    };
+
+    const qConj = ( q ) => [ -q[0], -q[1], -q[2], q[3] ];
+    const qRot = ( q, v ) =>
+    {
+        const [ qx, qy, qz, qw ] = q, [ vx, vy, vz ] = v;
+        const tx = 2 * ( qy * vz - qz * vy ), ty = 2 * ( qz * vx - qx * vz ), tz = 2 * ( qx * vy - qy * vx );
+        return [ vx + qw * tx + qy * tz - qz * ty, vy + qw * ty + qz * tx - qx * tz, vz + qw * tz + qx * ty - qy * tx ];
+    };
+    const camToDevice = ( a ) => [ a[0], -a[1], -a[2] ]; // self-inverse mapping
+
+    const est = new IMUScaleEstimator( { windowMs: DUR * 1000 } );
+
+    // IMU stream (60 Hz)
+    for( let i = 0; i < DUR * IMU_HZ; i++ )
+    {
+        const t = i / IMU_HZ;
+        const q = camQuat( t );
+        const measWorld = accM( t ).map( ( a, k ) => a + G[k] + rand() * 0.1 );
+        const aCam = qRot( qConj( q ), measWorld );
+        const aDev = camToDevice( aCam );
+        est.feedIMU( t * 1000, aDev[0], aDev[1], aDev[2] );
+    }
+
+    // camera pose stream (30 Hz, slam units, with noise + timing jitter)
+    for( let i = 0; i < DUR * CAM_HZ; i++ )
+    {
+        const t = i / CAM_HZ + rand() * 0.002;
+        const p = posM( t ).map( v => v / kTrue + rand() * 0.004 );
+        const q = camQuat( t );
+
+        // build a column-major pose with rotation from q and translation p
+        const [ x, y, z, w ] = q;
+        const R = [
+            1 - 2 * ( y * y + z * z ), 2 * ( x * y + z * w ), 2 * ( x * z - y * w ),
+            2 * ( x * y - z * w ), 1 - 2 * ( x * x + z * z ), 2 * ( y * z + x * w ),
+            2 * ( x * z + y * w ), 2 * ( y * z - x * w ), 1 - 2 * ( x * x + y * y )
+        ];
+        const pose = new Float32Array( [
+            R[0], R[1], R[2], 0,
+            R[3], R[4], R[5], 0,
+            R[6], R[7], R[8], 0,
+            p[0], p[1], p[2], 1
+        ] );
+
+        est.feedPose( t * 1000, pose );
+    }
+
+    const r = est.estimate();
+
+    const gN = Math.hypot( ...G );
+    const gDir = G.map( v => v / gN );
+    const result = r ? {
+        kTrue: kTrue,
+        kEst: +r.metersPerUnit.toFixed( 4 ),
+        kErrorPct: +( 100 * Math.abs( r.metersPerUnit - kTrue ) / kTrue ).toFixed( 2 ),
+        gravityDot: +( r.gravity[0] * gDir[0] + r.gravity[1] * gDir[1] + r.gravity[2] * gDir[2] ).toFixed( 4 ),
+        gravityMagEst: +r.gravityMagnitude.toFixed( 2 ),
+        confidence: +r.confidence.toFixed( 3 ),
+        pairs: r.pairs,
+        PASS: ( Math.abs( r.metersPerUnit - kTrue ) / kTrue < 0.05 )
+              && ( r.gravity[0] * gDir[0] + r.gravity[1] * gDir[1] + r.gravity[2] * gDir[2] > 0.99 )
+    } : { PASS: false, reason: 'estimator returned null' };
+
+    window.__result = result;
+    document.getElementById( 'out' ).textContent = JSON.stringify( result, null, 2 );
+    document.title = result.PASS ? 'Scale Test PASS' : 'Scale Test FAIL';
+</script>
+</body>
+</html>
